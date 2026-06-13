@@ -57,7 +57,6 @@ export const NAV = [
       { label: "Health", href: "/projects/health" },
     ],
   },
-  { label: "Apply", href: "/apply" },
   { label: "Contact", href: "/contact" },
 ];
 

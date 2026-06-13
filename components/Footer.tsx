@@ -71,6 +71,11 @@ export default function Footer() {
                 </li>
               ))}
               <li>
+                <Link href="/apply" className="text-paper/70 transition-colors hover:text-paper">
+                  Apply
+                </Link>
+              </li>
+              <li>
                 <a
                   href={LINKS.nationalSite}
                   target="_blank"
