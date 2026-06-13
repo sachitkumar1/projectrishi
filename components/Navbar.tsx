@@ -1,41 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { NAV, ORG } from "@/lib/content";
+import { NAV } from "@/lib/content";
 
 function Wordmark() {
   return (
-    <Link href="/" className="group flex items-center gap-2.5" aria-label="Project RISHI home">
-      <span className="grid h-9 w-9 place-items-center rounded-full bg-pine text-paper transition-colors group-hover:bg-marigold group-hover:text-pine-deep">
-        <span className="font-display text-lg font-semibold leading-none">R</span>
-      </span>
-      <span className="flex flex-col leading-tight">
-        <span className="font-display text-[17px] font-semibold tracking-tight text-pine-deep">
-          {ORG.name}
-        </span>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sage">
-          {ORG.chapter}
-        </span>
-      </span>
+    <Link href="/" className="flex items-center" aria-label="Project RISHI home">
+      <Image
+        src="/images/project-rishi-logo.png"
+        alt="Project RISHI"
+        width={260}
+        height={130}
+        priority
+        className="h-12 w-auto"
+      />
     </Link>
   );
 }
 
 export default function Navbar() {
   const pathname = usePathname();
-  const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [projOpen, setProjOpen] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -47,11 +37,7 @@ export default function Navbar() {
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "border-b border-pine/10 bg-paper/85 backdrop-blur-md"
-          : "border-b border-transparent bg-transparent"
-      }`}
+      className="fixed inset-x-0 top-0 z-50 border-b border-pine/10 bg-paper/90 backdrop-blur-md"
       style={{ height: "var(--header-h)" }}
     >
       <nav className="container-rishi flex h-full items-center justify-between">
