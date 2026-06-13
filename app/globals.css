@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --header-h: 76px;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: var(--header-h);
+}
+
+body {
+  background-color: theme("colors.paper");
+  color: theme("colors.ink");
+  font-family: theme("fontFamily.sans");
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer base {
+  ::selection {
+    background-color: theme("colors.marigold.soft");
+    color: theme("colors.pine.deep");
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: theme("fontFamily.display");
+    letter-spacing: -0.02em;
+  }
+
+  /* Keyboard focus ring — visible and on-brand */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid theme("colors.marigold.DEFAULT");
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  .container-rishi {
+    @apply mx-auto w-full max-w-content px-6 sm:px-8;
+  }
+
+  /* Small uppercase label used as section eyebrows */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em];
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-all duration-300 ease-out;
+  }
+  .btn-primary {
+    @apply btn bg-pine text-paper hover:bg-pine-deep hover:-translate-y-0.5;
+  }
+  .btn-accent {
+    @apply btn bg-marigold text-pine-deep hover:bg-marigold-deep hover:text-paper hover:-translate-y-0.5;
+  }
+  .btn-ghost {
+    @apply btn border border-pine/25 text-pine hover:border-pine hover:bg-pine hover:text-paper;
+  }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
