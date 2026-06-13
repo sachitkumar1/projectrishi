@@ -40,38 +40,58 @@ export default function Home() {
           <Contours className="absolute -bottom-10 left-0 h-[70%] w-full text-marigold" opacity={0.16} />
         </div>
 
-        <div className="container-rishi relative z-10 pt-[var(--header-h)]">
-          <motion.span {...rise(0)} className="eyebrow text-marigold-soft">
-            <span className="h-1.5 w-1.5 rounded-full bg-marigold" />
-            {HOME.heroEyebrow}
-          </motion.span>
-
-          <h1 className="mt-5 font-display font-semibold leading-[0.92]">
-            <motion.span {...rise(1)} className="block text-6xl sm:text-7xl lg:text-8xl">
-              {HOME.heroLine1}
+        <div className="container-rishi relative z-10 grid items-stretch gap-12 pt-[var(--header-h)] lg:grid-cols-[1fr_1.2fr]">
+          {/* Text column */}
+          <div>
+            <motion.span {...rise(0)} className="eyebrow text-marigold-soft">
+              <span className="h-1.5 w-1.5 rounded-full bg-marigold" />
+              {HOME.heroEyebrow}
             </motion.span>
-            <motion.span
-              {...rise(2)}
-              className="block text-7xl text-marigold sm:text-8xl lg:text-9xl"
+
+            <h1 className="mt-5 font-display font-semibold leading-[0.92]">
+              <motion.span {...rise(1)} className="block text-6xl sm:text-7xl lg:text-8xl">
+                {HOME.heroLine1}
+              </motion.span>
+              <motion.span
+                {...rise(2)}
+                className="block text-7xl text-marigold sm:text-8xl lg:text-9xl"
+              >
+                {HOME.heroLine2}
+              </motion.span>
+            </h1>
+
+            <motion.p
+              {...rise(3)}
+              className="mt-6 max-w-xl text-lg text-paper/80 sm:text-xl"
             >
-              {HOME.heroLine2}
-            </motion.span>
-          </h1>
+              {HOME.heroSub}
+            </motion.p>
 
-          <motion.p
-            {...rise(3)}
-            className="mt-6 max-w-xl text-lg text-paper/80 sm:text-xl"
+            <motion.div {...rise(4)} className="mt-9 flex flex-wrap gap-3">
+              <a href={LINKS.interestForm} target="_blank" rel="noopener noreferrer" className="btn-accent">
+                Register your interest
+              </a>
+              <Link href="/about" className="btn border border-paper/30 text-paper hover:bg-paper hover:text-pine-deep">
+                Learn about us
+              </Link>
+            </motion.div>
+          </div>
+
+          {/* Image column — fills the space to the right of the title (desktop only) */}
+          <motion.div
+            initial={reduce ? false : { opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.9, delay: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            className="hidden h-full lg:block"
           >
-            {HOME.heroSub}
-          </motion.p>
-
-          <motion.div {...rise(4)} className="mt-9 flex flex-wrap gap-3">
-            <a href={LINKS.interestForm} target="_blank" rel="noopener noreferrer" className="btn-accent">
-              Register your interest
-            </a>
-            <Link href="/about" className="btn border border-paper/30 text-paper hover:bg-paper hover:text-pine-deep">
-              Learn about us
-            </Link>
+            <Media
+              src={HOME.heroSideImage}
+              alt="Project RISHI's work in Bharog Baneri"
+              label="Hero side image"
+              className="h-full min-h-[340px] w-full"
+              rounded="rounded-3xl"
+              sizes="(max-width: 1024px) 0px, 52vw"
+            />
           </motion.div>
         </div>
 

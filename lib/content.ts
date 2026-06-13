@@ -68,6 +68,8 @@ export const HOME = {
   heroSub: "Rural India Social & Health Improvement",
   // Hero background image — replace with a wide village / team photo.
   heroImage: null as string | null, // e.g. "/images/hero-village.jpg"
+  // Image shown to the RIGHT of the title on desktop. Set a path to fill it.
+  heroSideImage: null as string | null, // e.g. "/images/hero-side.jpg"
   missionTitle: "Our Mission",
   missionBody:
     "Project RISHI promotes the sustainable development and growth of rural Indian communities. We continually expand our resources to support our villagers — identifying issues central to our target communities and providing the means to implement solutions through extensive field research and on-campus initiatives.",
