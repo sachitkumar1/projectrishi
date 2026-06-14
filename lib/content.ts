@@ -288,7 +288,7 @@ export const ABOUT = {
 
 export const APPLY = {
   heading: "Thank you for your interest in Project RISHI!",
-  termLabel: "Fall 2025 Recruitment",
+  termLabel: "Fall 2026 Recruitment",
   // Recruitment timeline — edit dates each cycle.
   timeline: [
     { label: "Coffee Chats", value: "Aug 28 – Sep 5" },
