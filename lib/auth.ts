@@ -17,8 +17,9 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     // GATE: only allow sign-in if the Google email is in the members allowlist.
     async signIn({ user }) {
-      return Boolean(findMember(user.email));
-    },
+  console.log("SIGN-IN ATTEMPT EMAIL:", user.email);
+  return Boolean(findMember(user.email));
+},
     // Attach the member's first/last name (from our table) to the token.
     async jwt({ token }) {
       const member = findMember(token.email);
