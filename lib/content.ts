@@ -27,7 +27,7 @@ export const ORG = {
   tagline: "Promoting the sustainable development of rural Indian communities.",
   email: "ucberkeley@projectrishi.org",
   address: "2495 Bancroft Way, Berkeley, CA 94720",
-  copyright: "© 2025 Project RISHI, The Berkeley Chapter. All Rights Reserved.",
+  copyright: "© 2026 Project RISHI, The Berkeley Chapter. All Rights Reserved.",
 };
 
 /** All external / action links in one place. Replace TODO values. */
@@ -304,7 +304,7 @@ export const PROJECTS_PAGE = {
 
 export const APPLY = {
   heading: "Thank you for your interest in Project RISHI!",
-  termLabel: "Fall 2025 Recruitment",
+  termLabel: "Fall 2026 Recruitment",
   // Recruitment timeline — edit dates each cycle.
   timeline: [
     { label: "Coffee Chats", value: "Aug 28 – Sep 5" },
