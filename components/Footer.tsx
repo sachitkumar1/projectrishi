@@ -94,14 +94,20 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col items-start gap-3 border-t border-paper/15 pt-6 text-xs text-paper/50 sm:flex-row sm:items-center sm:justify-between">
-          <p>{ORG.copyright}</p>
-          <div className="flex items-center gap-4">
-            <span>Promoting sustainable development since 2008.</span>
+        <div className="mt-14 flex flex-col items-start gap-4 border-t border-paper/15 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-paper/50">{ORG.copyright}</p>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <span className="text-xs text-paper/50">
+              Promoting sustainable development since 2008.
+            </span>
             <Link
               href="/login"
-              className="text-paper/40 underline-offset-2 transition-colors hover:text-paper/80 hover:underline"
+              className="inline-flex items-center gap-2 rounded-full border border-paper/30 bg-paper/5 px-4 py-2 text-sm font-semibold text-paper transition-colors hover:border-marigold hover:bg-marigold hover:text-pine-deep"
             >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="11" width="16" height="9" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              </svg>
               Member Login
             </Link>
           </div>

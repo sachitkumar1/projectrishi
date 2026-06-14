@@ -22,24 +22,13 @@ function TreeNode({
   const kids = node.children ?? [];
 
   return (
-    <li className="relative">
-      <span
-        className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm transition-colors ${
-          isUser
-            ? "bg-marigold font-semibold text-pine-deep ring-2 ring-marigold-deep ring-offset-2 ring-offset-paper"
-            : "border border-pine/15 bg-paper text-ink/80"
-        }`}
-      >
+    <li>
+      <span className={`ft-node ${isUser ? "ft-node--me" : ""}`}>
         {node.name}
-        {isUser && (
-          <span className="rounded-full bg-pine-deep px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-paper">
-            You
-          </span>
-        )}
+        {isUser && <span className="ft-badge">You</span>}
       </span>
-
       {kids.length > 0 && (
-        <ul className="ml-4 mt-2 space-y-2 border-l border-pine/15 pl-5">
+        <ul>
           {kids.map((child, i) => (
             <TreeNode key={`${child.name}-${i}`} node={child} userName={userName} />
           ))}
@@ -66,7 +55,7 @@ function LineageCard({
           : "border-pine/12 bg-paper"
       }`}
     >
-      <div className="mb-5 flex items-center justify-between gap-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <p className="eyebrow text-sage">
             <span className="h-1.5 w-1.5 rounded-full bg-pine" />
@@ -83,10 +72,12 @@ function LineageCard({
         )}
       </div>
 
-      <div className="overflow-x-auto">
-        <ul className="min-w-max space-y-2">
-          <TreeNode node={tree} userName={userName} />
-        </ul>
+      <div className="overflow-x-auto pb-2">
+        <div className="familytree">
+          <ul>
+            <TreeNode node={tree} userName={userName} />
+          </ul>
+        </div>
       </div>
     </div>
   );

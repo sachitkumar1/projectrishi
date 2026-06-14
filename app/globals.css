@@ -81,3 +81,103 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ============================================================================
+   FAMILY TREE (member lineage page)
+   Classic top-down tree: head at the top, littles branching below with
+   connector lines. Wrap in an overflow-x-auto container for wide trees.
+   ========================================================================== */
+.familytree {
+  --ft-line: rgba(30, 77, 58, 0.22);
+  display: inline-block;
+  min-width: 100%;
+}
+.familytree ul {
+  position: relative;
+  padding-top: 24px;
+  display: flex;
+  justify-content: center;
+}
+.familytree > ul {
+  padding-top: 0;
+}
+.familytree li {
+  list-style: none;
+  position: relative;
+  padding: 24px 12px 0;
+  text-align: center;
+}
+/* down + elbow connectors */
+.familytree li::before,
+.familytree li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 50%;
+  border-top: 2px solid var(--ft-line);
+  width: 50%;
+  height: 24px;
+}
+.familytree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 2px solid var(--ft-line);
+}
+.familytree li:only-child::after,
+.familytree li:only-child::before {
+  display: none;
+}
+.familytree li:only-child {
+  padding-top: 0;
+}
+.familytree li:first-child::before,
+.familytree li:last-child::after {
+  border: 0 none;
+}
+.familytree li:last-child::before {
+  border-right: 2px solid var(--ft-line);
+  border-radius: 0 6px 0 0;
+}
+.familytree li:first-child::after {
+  border-radius: 6px 0 0 0;
+}
+.familytree ul ul::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  border-left: 2px solid var(--ft-line);
+  width: 0;
+  height: 24px;
+}
+.ft-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  border: 1px solid rgba(30, 77, 58, 0.2);
+  background: #fbf8f1;
+  color: #1b2620;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  line-height: 1.2;
+  box-shadow: 0 1px 2px rgba(20, 54, 40, 0.06);
+}
+.ft-node--me {
+  background: #e2a02f;
+  color: #143628;
+  font-weight: 600;
+  border-color: #c27e18;
+  box-shadow: 0 0 0 3px rgba(226, 160, 47, 0.35);
+}
+.ft-badge {
+  background: #143628;
+  color: #fbf8f1;
+  border-radius: 9999px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
