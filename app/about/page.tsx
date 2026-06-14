@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import Media from "@/components/Media";
 import Reveal from "@/components/Reveal";
 import Contours from "@/components/Contours";
 import SectionHeading from "@/components/SectionHeading";
-import { ABOUT } from "@/lib/content";
+import { ABOUT, LINKS } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "About",
@@ -39,6 +40,9 @@ export default function AboutPage() {
               <p className="mt-6 text-lg leading-relaxed text-ink/75">
                 {ABOUT.mission.body}
               </p>
+              <Link href="/projects" className="btn-primary mt-7">
+                Explore our teams
+              </Link>
             </Reveal>
           </div>
 
@@ -86,31 +90,8 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Life at Project RISHI — gallery */}
-      <section className="container-rishi py-20">
-        <SectionHeading eyebrow="In the field" title="Life at Project RISHI" />
-        <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3">
-          {ABOUT.gallery.map((src, i) => (
-            <Reveal
-              key={i}
-              delay={(i % 3) * 0.08}
-              className={i % 5 === 0 ? "md:row-span-2" : ""}
-            >
-              <Media
-                src={src}
-                alt={`Project RISHI gallery photo ${i + 1}`}
-                label={`Gallery ${i + 1}`}
-                className={`w-full ${i % 5 === 0 ? "aspect-[3/4] md:h-full" : "aspect-[4/3]"}`}
-                rounded="rounded-2xl"
-                sizes="(max-width: 768px) 50vw, 33vw"
-              />
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
       {/* Our Team */}
-      <section className="container-rishi pb-20">
+      <section className="container-rishi py-20">
         <SectionHeading eyebrow="The people" title="Our Team" />
         <Reveal delay={0.1}>
           <Media
@@ -121,6 +102,30 @@ export default function AboutPage() {
             rounded="rounded-3xl"
             sizes="100vw"
           />
+        </Reveal>
+      </section>
+
+      {/* Life at Project RISHI — gallery */}
+      <section className="container-rishi pb-20">
+        <SectionHeading eyebrow="In Action" title="Life at Project RISHI" />
+        <Reveal delay={0.1}>
+          <div className="mt-10 columns-2 gap-3 sm:columns-3 lg:columns-5">
+            {ABOUT.gallery.map((src, i) => {
+              const portrait = i % 3 === 1; // mix vertical + horizontal
+              return (
+                <div key={i} className="mb-3 break-inside-avoid">
+                  <Media
+                    src={src}
+                    alt={`Project RISHI gallery photo ${i + 1}`}
+                    label={`Photo ${i + 1}`}
+                    className={`w-full ${portrait ? "aspect-[3/4]" : "aspect-[4/3]"}`}
+                    rounded="rounded-xl"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                  />
+                </div>
+              );
+            })}
+          </div>
         </Reveal>
       </section>
 
@@ -151,6 +156,29 @@ export default function AboutPage() {
               </Reveal>
             ))}
           </div>
+
+          {/* Standout link to the national organization */}
+          <Reveal delay={0.1}>
+            <a
+              href={LINKS.nationalSite}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group mt-6 flex items-center justify-center gap-3 rounded-2xl bg-pine px-8 py-5 text-paper shadow-lg shadow-pine/20 transition-all hover:-translate-y-0.5 hover:bg-pine-deep"
+            >
+              <span className="font-display text-lg font-semibold">
+                Visit the National Project RISHI Webpage
+              </span>
+              <svg
+                className="h-5 w-5 transition-transform group-hover:translate-x-1"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M7 17 17 7M9 7h8v8" />
+              </svg>
+            </a>
+          </Reveal>
         </div>
       </section>
     </>

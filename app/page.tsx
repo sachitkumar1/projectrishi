@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import Media from "@/components/Media";
 import Reveal from "@/components/Reveal";
@@ -10,6 +12,12 @@ import { HOME, PROJECTS, ABOUT, LINKS } from "@/lib/content";
 
 export default function Home() {
   const reduce = useReducedMotion();
+  const router = useRouter();
+
+  const goToRandomProject = () => {
+    const slug = PROJECTS[Math.floor(Math.random() * PROJECTS.length)].slug;
+    router.push(`/projects/${slug}`);
+  };
 
   const rise = (i: number) => ({
     initial: reduce ? false : { opacity: 0, y: 30 },
@@ -20,78 +28,56 @@ export default function Home() {
   return (
     <>
       {/* ---------------------------------------------------------------- HERO */}
-      <section className="relative flex min-h-[92vh] items-center overflow-hidden bg-pine text-paper">
-        {/* Optional hero photo behind everything */}
+      <section className="relative flex min-h-[92vh] items-center overflow-hidden bg-pine-deep text-paper">
+        {/* Blurred background photo */}
         {HOME.heroImage && (
-          <Media
+          <Image
             src={HOME.heroImage}
-            alt="Bharog Baneri village"
-            className="absolute inset-0 h-full w-full"
-            rounded="rounded-none"
+            alt="Himalayan foothills near Bharog Baneri"
+            fill
             priority
             sizes="100vw"
+            className="scale-110 object-cover blur-[3px]"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-br from-pine-deep via-pine to-pine-soft" />
-        <Contours className="absolute inset-0 h-full w-full text-paper" opacity={0.13} />
+        {/* Green overlay for legibility (kept light so the photo shows) */}
+        <div className="absolute inset-0 bg-pine-deep/45" />
+        <div className="absolute inset-0 bg-gradient-to-b from-pine-deep/30 via-pine-deep/35 to-pine-deep/75" />
+        <Contours className="absolute inset-0 h-full w-full text-paper" opacity={0.08} />
 
-        {/* animated contour draw accent */}
-        <div className="absolute inset-0 z-0">
-          <Contours className="absolute -bottom-10 left-0 h-[70%] w-full text-marigold" opacity={0.16} />
-        </div>
+        {/* Centered content */}
+        <div className="container-rishi relative z-10 flex flex-col items-center pt-[var(--header-h)] text-center [text-shadow:_0_2px_16px_rgba(12,22,16,0.45)]">
+          <motion.span {...rise(0)} className="eyebrow text-marigold-soft">
+            <span className="h-1.5 w-1.5 rounded-full bg-marigold" />
+            {HOME.heroEyebrow}
+          </motion.span>
 
-        <div className="container-rishi relative z-10 grid items-stretch gap-12 pt-[var(--header-h)] lg:grid-cols-[1fr_1.2fr]">
-          {/* Text column */}
-          <div>
-            <motion.span {...rise(0)} className="eyebrow text-marigold-soft">
-              <span className="h-1.5 w-1.5 rounded-full bg-marigold" />
-              {HOME.heroEyebrow}
+          <h1 className="mt-5 font-display font-semibold leading-[0.92]">
+            <motion.span {...rise(1)} className="block text-6xl sm:text-7xl lg:text-8xl">
+              {HOME.heroLine1}
             </motion.span>
-
-            <h1 className="mt-5 font-display font-semibold leading-[0.92]">
-              <motion.span {...rise(1)} className="block text-6xl sm:text-7xl lg:text-8xl">
-                {HOME.heroLine1}
-              </motion.span>
-              <motion.span
-                {...rise(2)}
-                className="block text-7xl text-marigold sm:text-8xl lg:text-9xl"
-              >
-                {HOME.heroLine2}
-              </motion.span>
-            </h1>
-
-            <motion.p
-              {...rise(3)}
-              className="mt-6 max-w-xl text-lg text-paper/80 sm:text-xl"
+            <motion.span
+              {...rise(2)}
+              className="block text-7xl text-marigold sm:text-8xl lg:text-9xl"
             >
-              {HOME.heroSub}
-            </motion.p>
+              {HOME.heroLine2}
+            </motion.span>
+          </h1>
 
-            <motion.div {...rise(4)} className="mt-9 flex flex-wrap gap-3">
-              <a href={LINKS.interestForm} target="_blank" rel="noopener noreferrer" className="btn-accent">
-                Register your interest
-              </a>
-              <Link href="/about" className="btn border border-paper/30 text-paper hover:bg-paper hover:text-pine-deep">
-                Learn about us
-              </Link>
-            </motion.div>
-          </div>
-
-          {/* Image column — fills the space to the right of the title (desktop only) */}
-          <motion.div
-            initial={reduce ? false : { opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.9, delay: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            className="hidden h-full lg:block"
+          <motion.p
+            {...rise(3)}
+            className="mt-6 max-w-xl text-lg text-paper/90 sm:text-xl"
           >
-            <Media
-              src={HOME.heroSideImage}
-              alt="Project RISHI's work in Bharog Baneri"
-              label="Hero side image"
-              className="h-full min-h-[340px] w-full"
-              rounded="rounded-3xl"
-              sizes="(max-width: 1024px) 0px, 52vw"
-            />
+            {HOME.heroSub}
+          </motion.p>
+
+          <motion.div {...rise(4)} className="mt-9 flex flex-wrap justify-center gap-3">
+            <a href={LINKS.interestForm} target="_blank" rel="noopener noreferrer" className="btn-accent">
+              Register your interest
+            </a>
+            <Link href="/about" className="btn border border-paper/40 text-paper hover:bg-paper hover:text-pine-deep">
+              Learn about us
+            </Link>
           </motion.div>
         </div>
 
@@ -100,12 +86,12 @@ export default function Home() {
           initial={reduce ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.2, duration: 0.8 }}
-          className="absolute bottom-7 left-1/2 z-10 -translate-x-1/2 text-paper/50"
+          className="absolute bottom-7 left-1/2 z-10 -translate-x-1/2 text-paper/60"
           aria-hidden
         >
-          <div className="flex h-9 w-5 items-start justify-center rounded-full border border-paper/30 p-1">
+          <div className="flex h-9 w-5 items-start justify-center rounded-full border border-paper/40 p-1">
             <motion.span
-              className="h-1.5 w-1 rounded-full bg-paper/70"
+              className="h-1.5 w-1 rounded-full bg-paper/80"
               animate={reduce ? {} : { y: [0, 10, 0] }}
               transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
             />
@@ -126,9 +112,9 @@ export default function Home() {
                 <Link href="/about" className="btn-primary">
                   Our story
                 </Link>
-                <Link href="/projects/education" className="btn-ghost">
+                <button onClick={goToRandomProject} className="btn-ghost">
                   Explore projects
-                </Link>
+                </button>
               </div>
             </Reveal>
           </div>
@@ -161,7 +147,7 @@ export default function Home() {
       <section className="relative overflow-hidden bg-pine-deep py-24 text-paper">
         <Contours className="absolute inset-x-0 top-0 h-80 w-full text-marigold" opacity={0.1} />
         <div className="container-rishi relative z-10">
-          <SectionHeading eyebrow="What we do" title="Four teams, one village" accent="pine" tone="dark" />
+          <SectionHeading eyebrow="What we do" title="Four teams, One village" accent="pine" tone="dark" />
           <Reveal delay={0.1}>
             <p className="mt-4 max-w-2xl text-paper/70">
               Our work in Bharog Baneri is carried out by four project teams, each

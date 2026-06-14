@@ -66,9 +66,9 @@ export const HOME = {
   heroLine2: "RISHI",
   heroSub: "Rural India Social & Health Improvement",
   // Hero background image — replace with a wide village / team photo.
-  heroImage: null as string | null, // e.g. "/images/hero-village.jpg"
-  // Image shown to the RIGHT of the title on desktop. Set a path to fill it.
-  heroSideImage: "/images/hero-side.jpg" as string | null,
+  heroImage: "/images/hero-bg.jpg" as string | null, // e.g. "/images/hero-village.jpg"
+  // (No longer used — the hero now uses a centered layout over heroImage.)
+  heroSideImage: null as string | null,
   missionTitle: "Our Mission",
   missionBody:
     "Project RISHI promotes the sustainable development and growth of rural Indian communities. We continually expand our resources to support our villagers — identifying issues central to our target communities and providing the means to implement solutions through extensive field research and on-campus initiatives.",
@@ -264,7 +264,12 @@ export const ABOUT = {
   },
   // Gallery slots for the "Life at Project RISHI" section.
   // Add images to public/images/gallery/ and list their paths here.
-  gallery: [null, null, null, null, null, null] as (string | null)[],
+  // Gallery for "Life at Project RISHI". Add images to public/images/gallery/
+  // and list their paths here. Mix portrait and landscape freely.
+  gallery: [
+    null, null, null, null, null,
+    null, null, null, null, null,
+  ] as (string | null)[],
   // Team photo — replace with your group picture.
   teamImage: "/images/team-photo.jpg" as string | null,
   chapters: [
@@ -282,8 +287,19 @@ export const ABOUT = {
     { name: "Cal Poly Pomona", url: "https://www.instagram.com/projectrishicpp/?hl=en" },
     { name: "UC Riverside", url: "https://www.facebook.com/ucrprishi/" },
     { name: "UC San Diego", url: "https://www.facebook.com/projectrishiUCSD/" },
-    { name: "National Webpage", url: "http://www.projectrishi.org/" },
   ],
+};
+
+/** Projects index page — embedded trip video. */
+export const PROJECTS_PAGE = {
+  videoTitle: "Project Work in Action",
+  videoBlurb:
+    "A look at our team on the ground in Bharog Baneri — the people, the place, and the work we do together.",
+  // Paste a YouTube/Vimeo EMBED url here (the "embed" form, not the watch url).
+  //   YouTube example:  https://www.youtube.com/embed/VIDEO_ID
+  //   Vimeo example:    https://player.vimeo.com/video/VIDEO_ID
+  // Leave "" to show a labelled placeholder until you have the video.
+  videoEmbedUrl: "", // TODO add your India trip video embed url
 };
 
 export const APPLY = {

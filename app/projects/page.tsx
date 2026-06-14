@@ -3,7 +3,8 @@ import Link from "next/link";
 import Media from "@/components/Media";
 import Reveal from "@/components/Reveal";
 import Contours from "@/components/Contours";
-import { PROJECTS } from "@/lib/content";
+import SectionHeading from "@/components/SectionHeading";
+import { PROJECTS, PROJECTS_PAGE } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Projects",
@@ -22,7 +23,7 @@ export default function ProjectsIndex() {
               What We Do
             </span>
             <h1 className="mt-4 max-w-3xl font-display text-5xl font-semibold leading-[1.02] sm:text-6xl">
-              Four teams, one village
+              Four teams, One village
             </h1>
             <p className="mt-6 max-w-xl text-paper/80">
               Each team focuses on a pillar of sustainable development in Bharog
@@ -63,6 +64,53 @@ export default function ProjectsIndex() {
               </Link>
             </Reveal>
           ))}
+        </div>
+      </section>
+
+      {/* ----------------------------------------------- Project Work in Action */}
+      <section className="bg-pine-deep py-20 text-paper">
+        <div className="container-rishi">
+          <SectionHeading
+            eyebrow="On the ground"
+            title={PROJECTS_PAGE.videoTitle}
+            accent="pine"
+            tone="dark"
+          />
+          <Reveal delay={0.1}>
+            <p className="mt-4 max-w-2xl text-paper/70">{PROJECTS_PAGE.videoBlurb}</p>
+          </Reveal>
+
+          <Reveal delay={0.15}>
+            <div className="mt-10 overflow-hidden rounded-3xl border border-paper/10 bg-black/30 shadow-xl shadow-pine-deep/40">
+              <div className="relative aspect-video w-full">
+                {PROJECTS_PAGE.videoEmbedUrl ? (
+                  <iframe
+                    src={PROJECTS_PAGE.videoEmbedUrl}
+                    title={PROJECTS_PAGE.videoTitle}
+                    className="absolute inset-0 h-full w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 border border-dashed border-paper/25 text-center">
+                    <span className="grid h-16 w-16 place-items-center rounded-full bg-marigold/90 text-pine-deep">
+                      <svg className="h-7 w-7" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </span>
+                    <p className="rounded-full bg-ink/65 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-paper">
+                      Add your trip video
+                    </p>
+                    <p className="max-w-sm px-6 text-sm text-paper/60">
+                      Paste a YouTube or Vimeo embed link into{" "}
+                      <code className="text-marigold-soft">videoEmbedUrl</code> in
+                      lib/content.ts.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
     </>
