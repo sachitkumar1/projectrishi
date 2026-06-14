@@ -97,3 +97,5 @@ This is the fast, polished public site. The larger vision — a member dashboard
 with logins, tasks, calendar, and an alumni database — is a natural next phase.
 A good stack for that: this Next.js app + **Supabase** (auth + Postgres) for the
 dashboard data, deployed on the same Vercel project.
+
+
