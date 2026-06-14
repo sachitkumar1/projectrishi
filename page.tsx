@@ -121,6 +121,10 @@ export default function AboutPage() {
             rounded="rounded-3xl"
             sizes="100vw"
           />
+          <p className="mt-4 text-sm text-ink/50">
+            Replace this with your current team photo — or swap in a roster grid
+            later from the member dashboard.
+          </p>
         </Reveal>
       </section>
 

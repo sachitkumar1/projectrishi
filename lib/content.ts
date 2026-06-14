@@ -68,7 +68,7 @@ export const HOME = {
   // Hero background image — replace with a wide village / team photo.
   heroImage: null as string | null, // e.g. "/images/hero-village.jpg"
   // Image shown to the RIGHT of the title on desktop. Set a path to fill it.
-  heroSideImage: null as string | null, // e.g. "/images/hero-side.jpg"
+  heroSideImage: "/images/hero-side.jpg" as string | null,
   missionTitle: "Our Mission",
   missionBody:
     "Project RISHI promotes the sustainable development and growth of rural Indian communities. We continually expand our resources to support our villagers — identifying issues central to our target communities and providing the means to implement solutions through extensive field research and on-campus initiatives.",
@@ -266,7 +266,7 @@ export const ABOUT = {
   // Add images to public/images/gallery/ and list their paths here.
   gallery: [null, null, null, null, null, null] as (string | null)[],
   // Team photo — replace with your group picture.
-  teamImage: null as string | null,
+  teamImage: "/images/team-photo.jpg" as string | null,
   chapters: [
     { name: "Northwestern University", url: "https://www.facebook.com/nuprishi/" },
     { name: "Vanderbilt University", url: "https://www.facebook.com/ProjectRISHIVanderbilt/" },
@@ -288,7 +288,7 @@ export const ABOUT = {
 
 export const APPLY = {
   heading: "Thank you for your interest in Project RISHI!",
-  termLabel: "Fall 2026 Recruitment",
+  termLabel: "Fall 2025 Recruitment",
   // Recruitment timeline — edit dates each cycle.
   timeline: [
     { label: "Coffee Chats", value: "Aug 28 – Sep 5" },
