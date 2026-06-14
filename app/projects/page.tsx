@@ -33,40 +33,6 @@ export default function ProjectsIndex() {
         </div>
       </section>
 
-      <section className="container-rishi py-20">
-        <div className="grid gap-6 md:grid-cols-2">
-          {PROJECTS.map((p, i) => (
-            <Reveal as="article" key={p.slug} delay={i * 0.08}>
-              <Link
-                href={`/projects/${p.slug}`}
-                className="group block overflow-hidden rounded-3xl border border-pine/12 transition-colors hover:border-pine"
-              >
-                <Media
-                  src={p.image}
-                  alt={p.name}
-                  label={`${p.name} cover`}
-                  className="aspect-[16/9] w-full"
-                  rounded="rounded-none"
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                />
-                <div className="p-7">
-                  <h2 className="font-display text-2xl font-semibold text-pine-deep">
-                    {p.name}
-                  </h2>
-                  <p className="mt-2 line-clamp-3 text-ink/70">{p.intro}</p>
-                  <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-pine">
-                    Explore team
-                    <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </span>
-                </div>
-              </Link>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
       {/* ----------------------------------------------- Project Work in Action */}
       <section className="bg-pine-deep py-20 text-paper">
         <div className="container-rishi">
@@ -111,6 +77,40 @@ export default function ProjectsIndex() {
               </div>
             </div>
           </Reveal>
+        </div>
+      </section>
+
+      <section className="container-rishi py-20">
+        <div className="grid gap-6 md:grid-cols-2">
+          {PROJECTS.map((p, i) => (
+            <Reveal as="article" key={p.slug} delay={i * 0.08}>
+              <Link
+                href={`/projects/${p.slug}`}
+                className="group block overflow-hidden rounded-3xl border border-pine/12 transition-colors hover:border-pine"
+              >
+                <Media
+                  src={p.image}
+                  alt={p.name}
+                  label={`${p.name} cover`}
+                  className="aspect-[16/9] w-full"
+                  rounded="rounded-none"
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                />
+                <div className="p-7">
+                  <h2 className="font-display text-2xl font-semibold text-pine-deep">
+                    {p.name}
+                  </h2>
+                  <p className="mt-2 line-clamp-3 text-ink/70">{p.intro}</p>
+                  <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-pine">
+                    Explore team
+                    <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </span>
+                </div>
+              </Link>
+            </Reveal>
+          ))}
         </div>
       </section>
     </>

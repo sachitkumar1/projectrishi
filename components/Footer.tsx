@@ -94,9 +94,17 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t border-paper/15 pt-6 text-xs text-paper/50 sm:flex-row sm:items-center">
+        <div className="mt-14 flex flex-col items-start gap-3 border-t border-paper/15 pt-6 text-xs text-paper/50 sm:flex-row sm:items-center sm:justify-between">
           <p>{ORG.copyright}</p>
-          <p>Promoting sustainable development since 2008.</p>
+          <div className="flex items-center gap-4">
+            <span>Promoting sustainable development since 2008.</span>
+            <Link
+              href="/login"
+              className="text-paper/40 underline-offset-2 transition-colors hover:text-paper/80 hover:underline"
+            >
+              Member Login
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

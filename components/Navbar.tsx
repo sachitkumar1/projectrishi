@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { NAV } from "@/lib/content";
 
@@ -24,6 +25,8 @@ function Wordmark() {
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { status } = useSession();
+  const isMember = status === "authenticated";
   const [mobileOpen, setMobileOpen] = useState(false);
   const [projOpen, setProjOpen] = useState(false);
 
@@ -114,6 +117,18 @@ export default function Navbar() {
               </Link>
             )
           )}
+          {isMember && (
+            <Link
+              href="/dashboard"
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                isActive("/dashboard")
+                  ? "text-pine"
+                  : "text-pine/90 hover:text-pine"
+              }`}
+            >
+              Dashboard
+            </Link>
+          )}
           <Link href="/apply" className="btn-accent ml-2 px-5 py-2.5 text-sm">
             Join Us
           </Link>
@@ -180,6 +195,14 @@ export default function Navbar() {
                   )}
                 </div>
               ))}
+              {isMember && (
+                <Link
+                  href="/dashboard"
+                  className="block rounded-xl px-3 py-2.5 text-base font-semibold text-pine"
+                >
+                  Dashboard
+                </Link>
+              )}
               <Link href="/apply" className="btn-accent mt-3 w-full">
                 Join Us
               </Link>
