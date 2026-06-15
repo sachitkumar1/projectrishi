@@ -72,7 +72,7 @@ export const HOME = {
   missionTitle: "Our Mission",
   missionBody:
     "Project RISHI promotes the sustainable development and growth of rural Indian communities. We continually expand our resources to support our villagers — identifying issues central to our target communities and providing the means to implement solutions through extensive field research and on-campus initiatives.",
-  missionImage: null as string | null, // e.g. "/images/mission.jpg"
+  missionImage: "/images/mission.jpg" as string | null, // e.g. "/images/mission.jpg"
   stats: [
     { value: "2008", label: "Berkeley chapter founded" },
     { value: "1,400", label: "Residents in Bharog Baneri" },
@@ -85,7 +85,8 @@ export const PROJECTS = [
     slug: "education",
     name: "Education",
     color: "marigold",
-    image: null as string | null, // e.g. "/images/projects/education.jpg"
+    image: "/images/projects/education.jpg" as string | null,
+    heroImage: "/images/projects/education-hero.jpg" as string | null,
     quote: "Education is not preparation for life; education is life itself.",
     quoteAuthor: "John Dewey",
     intro:
@@ -125,7 +126,8 @@ export const PROJECTS = [
     slug: "water-sanitation",
     name: "Water & Sanitation",
     color: "pine",
-    image: null as string | null,
+    image: "/images/projects/water-sanitation.jpg" as string | null,
+    heroImage: "/images/projects/water-sanitation-hero.jpg" as string | null,
     quote: "A drop harvested is a crop harvested.",
     quoteAuthor: "",
     intro:
@@ -165,7 +167,8 @@ export const PROJECTS = [
     slug: "womens-empowerment",
     name: "Women's Empowerment",
     color: "marigold",
-    image: null as string | null,
+    image: "/images/projects/womens-empowerment.jpg" as string | null,
+    heroImage: "/images/projects/womens-empowerment-hero.jpg" as string | null,
     quote: "Women are the future of society.",
     quoteAuthor: "",
     intro:
@@ -205,7 +208,8 @@ export const PROJECTS = [
     slug: "health",
     name: "Health",
     color: "pine",
-    image: null as string | null,
+    image: "/images/projects/health.jpg" as string | null,
+    heroImage: "/images/projects/health-hero.jpg" as string | null,
     quote:
       "For he who has health has hope; and he who has hope, has everything.",
     quoteAuthor: "Owen Arthur",
@@ -267,8 +271,16 @@ export const ABOUT = {
   // Gallery for "Life at Project RISHI". Add images to public/images/gallery/
   // and list their paths here. Mix portrait and landscape freely.
   gallery: [
-    null, null, null, null, null,
-    null, null, null, null, null,
+    "/images/gallery/IMG_0036_Original.jpg",
+    "/images/gallery/IMG_2816_Original.jpg",
+    "/images/gallery/IMG_2908_Original.jpg",
+    "/images/gallery/IMG_0081_Original.jpg",
+    "/images/gallery/IMG_0083_Original.jpg",
+    "/images/gallery/IMG_0742_Original.jpg",
+    "/images/gallery/IMG_4018.JPG",
+    "/images/gallery/IMG_0039_Original.jpg",
+    "/images/gallery/IMG_2814_Original.jpg",
+    "/images/gallery/IMG_2921_Original.jpg",
   ] as (string | null)[],
   // Team photo — replace with your group picture.
   teamImage: "/images/team-photo.jpg" as string | null,

@@ -4,6 +4,7 @@ import Media from "@/components/Media";
 import Reveal from "@/components/Reveal";
 import Contours from "@/components/Contours";
 import SectionHeading from "@/components/SectionHeading";
+import PhotoWall from "@/components/PhotoWall";
 import { ABOUT, LINKS } from "@/lib/content";
 
 export const metadata: Metadata = {
@@ -109,23 +110,7 @@ export default function AboutPage() {
       <section className="container-rishi pb-20">
         <SectionHeading eyebrow="In Action" title="Life at Project RISHI" />
         <Reveal delay={0.1}>
-          <div className="mt-10 columns-2 gap-3 sm:columns-3 lg:columns-5">
-            {ABOUT.gallery.map((src, i) => {
-              const portrait = i % 3 === 1; // mix vertical + horizontal
-              return (
-                <div key={i} className="mb-3 break-inside-avoid">
-                  <Media
-                    src={src}
-                    alt={`Project RISHI gallery photo ${i + 1}`}
-                    label={`Photo ${i + 1}`}
-                    className={`w-full ${portrait ? "aspect-[3/4]" : "aspect-[4/3]"}`}
-                    rounded="rounded-xl"
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <PhotoWall images={ABOUT.gallery.filter(Boolean) as string[]} />
         </Reveal>
       </section>
 

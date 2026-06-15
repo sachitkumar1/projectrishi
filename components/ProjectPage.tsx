@@ -28,7 +28,7 @@ export default function ProjectPage({ project }: { project: Project }) {
           </Reveal>
           <Reveal delay={0.12}>
             <Media
-              src={project.image}
+              src={(project as { heroImage?: string | null }).heroImage ?? null}
               alt={`${project.name} team in Bharog Baneri`}
               label={`${project.name} hero photo`}
               className="aspect-[4/3] w-full"
