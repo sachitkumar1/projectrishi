@@ -60,7 +60,11 @@ export default function ProjectPage({ project }: { project: Project }) {
       {/* Highlights */}
       <section className="container-rishi py-20">
         <SectionHeading eyebrow="This term" title="Project Highlights" />
-        <div className="mt-10 grid gap-8 md:grid-cols-2">
+        <div
+          className={`mt-10 grid gap-8 ${
+            project.highlights.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"
+          }`}
+        >
           {project.highlights.map((h, i) => (
             <Reveal as="article" key={h.title} delay={i * 0.08} className="group">
               <Media

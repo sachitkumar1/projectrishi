@@ -131,35 +131,40 @@ export const PROJECTS = [
     quote: "A drop harvested is a crop harvested.",
     quoteAuthor: "",
     intro:
-      "The Water & Sanitation team is committed to increasing safe, clean water access across Bharog Baneri by building rainwater-harvesting systems and testing common drinking-water sources. We are also rebuilding and cleaning heavily-used wells for safe drinking use. Our goal is to ensure the entire village has water that is not only clean, but abundant in supply.",
+      "The Water & Sanitation team is committed to increasing safe, clean water access across Bharog Baneri while expanding agricultural education focused on sustainable farming practices. Through environmental education, farming resources, and community workshops, we help strengthen crop resilience during water shortages and support long-term food security. We build rainwater-harvesting systems, test common drinking-water sources, and rebuild and clean heavily used wells for safe drinking use. Our goal is to ensure the village has access to clean, safe water and also promote sustainable agricultural development.",
     highlights: [
       {
-        title: "Rainwater Harvesting Systems",
-        body: "Built 7 rainwater-harvesting systems across the village, providing several thousand litres of water access for crop irrigation.",
-        image: null,
+        title: "Agricultural Workshops",
+        body: "Hosted workshops for 150+ farmers that focused on natural farming and horticulture methods by partnering with Dr. Shiwali Dhiman from KVK Institute, Sh. Amit Kumar Bakshi from the Horticulture Development Block, and the PARAYAS Society NGO. Distributed seed kits and educational materials to increase engagement and awareness.",
+        image: "/images/projects/agriculture-workshop.jpg",
       },
       {
-        title: "Filter Distribution",
-        body: "Distributed and installed bio-sand water filters for clean drinking water across Bharog Baneri.",
-        image: null,
+        title: "Rainwater Harvesting Systems",
+        body: "Surveyed families with water scarcity issues and evaluated their needs in relation to unbiased socioeconomic questions. Using that information, we evaluated 27 Rainwater Harvesting System recipients who will receive a 2,000-liter system to increase agricultural yield.",
+        image: "/images/projects/rainwater-harvesting.jpg",
+      },
+      {
+        title: "Primary School Well Building",
+        body: "Based on an issue we found regarding irregular water supply and water contamination at the Kujjewala Primary School, we built a 500-liter cement tank that will supply children with clean and accessible water throughout the day.",
+        image: "/images/projects/primary-school-well.jpg",
       },
     ],
     past: [
       {
-        title: "Water Testing",
+        title: "Natural Resource Water Testing Initiative",
         body: "Tested 10+ locations across the village for coliform and E. coli contamination.",
       },
       {
-        title: "Gather Data & Build",
-        body: "Completed 8 remote builds and identified new recipients through general surveying. Geotagged past rainwater-harvesting recipients and trained Naresh Ji to manage future geotagging.",
+        title: "SATHI Water Filter System",
+        body: "Distributed SATHI water filters, a slow sand-based water filter, to households to purify their drinking water.",
       },
       {
-        title: "TGIF Grant",
-        body: "Organized a rainwater-harvesting design-a-thon and a sustainable-development speaker panel in Fall 2021 to create direct impact within the UC Berkeley community.",
+        title: "UC Berkeley Design-A-Thon Sponsored by TGIF",
+        body: "Organized a roofless rainwater harvesting system Design-A-Thon in 2026 and had a similar event plus a sustainable development speaker panel in Fall 2021 to create direct impact within the Berkeley community.",
       },
       {
-        title: "Remote Construction",
-        body: "Worked closely with village contacts and builders to carefully choose recipients based on need for remote systems.",
+        title: "Built 20+ Rainwater Harvesting Systems",
+        body: "Conducted unbiased surveying and worked closely with village contacts and builders to carefully choose recipients based on need for rainwater harvesting systems.",
       },
     ],
   },
