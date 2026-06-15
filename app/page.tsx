@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import Media from "@/components/Media";
 import Reveal from "@/components/Reveal";
@@ -12,12 +11,6 @@ import { HOME, PROJECTS, ABOUT, LINKS } from "@/lib/content";
 
 export default function Home() {
   const reduce = useReducedMotion();
-  const router = useRouter();
-
-  const goToRandomProject = () => {
-    const slug = PROJECTS[Math.floor(Math.random() * PROJECTS.length)].slug;
-    router.push(`/projects/${slug}`);
-  };
 
   const rise = (i: number) => ({
     initial: reduce ? false : { opacity: 0, y: 30 },
@@ -112,9 +105,9 @@ export default function Home() {
                 <Link href="/about" className="btn-primary">
                   Our story
                 </Link>
-                <button onClick={goToRandomProject} className="btn-ghost">
+                <Link href="/projects" className="btn-ghost">
                   Explore projects
-                </button>
+                </Link>
               </div>
             </Reveal>
           </div>
