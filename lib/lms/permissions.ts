@@ -32,6 +32,26 @@ export function assignableMembers(assigner: Member): Member[] {
   return MEMBERS.filter((m) => canAssignTaskTo(assigner, m));
 }
 
+/** Audience shapes available when ASSIGNING tasks (parallels event scopes). */
+export type AssignScopeKind = "members" | "group" | "club";
+export function allowedAssignScopes(m: Member): AssignScopeKind[] {
+  const s = new Set<AssignScopeKind>();
+  if (canAssignTasks(m)) s.add("members"); // pick specific people
+  if (m.roles.lead) s.add("group"); // their own whole project group
+  if (m.roles.vpp) {
+    s.add("group"); // any whole project group
+    s.add("club"); // everyone
+  }
+  return Array.from(s);
+}
+
+/** Which whole groups this person can assign a task to. */
+export function assignableGroups(m: Member): ProjectGroup[] {
+  if (m.roles.vpp) return ["E", "R", "W", "H"];
+  if (m.roles.lead) return [m.group];
+  return [];
+}
+
 // -------------------------------------------------------------- task complete
 /** The assignee marks their task done → moves it to "pending" (awaiting approval). */
 export function canSubmitTask(task: Task, actorEmail: string): boolean {

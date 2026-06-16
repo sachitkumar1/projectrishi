@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
 import { MEMBERS } from "@/lib/members";
 import {
+  allowedAssignScopes,
   allowedEventScopes,
+  assignableGroups,
   assignableMembers,
   canAssignTasks,
   canCreateEvents,
@@ -29,6 +31,8 @@ export async function GET() {
       createEvents: canCreateEvents(me),
     },
     assignableMembers: assignableMembers(me).map(lite),
+    assignScopes: allowedAssignScopes(me),
+    assignableGroups: assignableGroups(me),
     eventScopes: allowedEventScopes(me),
     targetableGroups: targetableGroups(me),
     eventMemberTargets: targetableMembers(me).map(lite),

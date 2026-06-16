@@ -19,6 +19,8 @@ type Meta = {
   me: { email: string; name: string; group: Group; roles: Roles };
   can: { assignTasks: boolean; createEvents: boolean };
   assignableMembers: Lite[];
+  assignScopes: Array<"members" | "group" | "club">;
+  assignableGroups: Group[];
   eventScopes: Array<"members" | "group" | "club" | "all_newbies">;
   targetableGroups: Group[];
   eventMemberTargets: Lite[];
@@ -556,6 +558,42 @@ const inputCls =
   "mt-1 w-full rounded-xl border border-pine/15 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-pine";
 const labelCls = "block text-sm font-medium text-ink/80";
 
+// Searchable member checklist (used for "specific members" pickers).
+function MemberPicker({
+  members, selected, onToggle, single,
+}: {
+  members: Lite[]; selected: string[]; onToggle: (email: string) => void; single?: boolean;
+}) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const filtered = needle
+    ? members.filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(needle))
+    : members;
+  return (
+    <div>
+      <input
+        className={inputCls}
+        style={{ marginTop: 0 }}
+        placeholder="Search members by name…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+      <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-pine/15 p-2">
+        {filtered.length === 0 && <p className="px-2 py-1 text-xs text-ink/40">No matches.</p>}
+        {filtered.map((m) => (
+          <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-pine/5">
+            <input type={single ? "radio" : "checkbox"} checked={selected.includes(m.email)} onChange={() => onToggle(m.email)} />
+            {m.name} <span className="text-xs text-ink/40">· {GROUP_LABEL[m.group]}</span>
+          </label>
+        ))}
+      </div>
+      {selected.length > 0 && (
+        <p className="mt-1 text-xs text-ink/45">{selected.length} selected</p>
+      )}
+    </div>
+  );
+}
+
 // -------------------------------------------------------------------- task form
 function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?: Task | null; onClose: () => void; onCreated: () => void }) {
   const isEdit = !!editing;
@@ -566,6 +604,11 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
   const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
   const [assignees, setAssignees] = useState<string[]>(editing ? [editing.assigneeEmail] : []);
+  const scopes = meta.assignScopes.length ? meta.assignScopes : (["members"] as const);
+  const [scope, setScope] = useState<"members" | "group" | "club">(isEdit ? "members" : scopes[0]);
+  const [groups, setGroups] = useState<Group[]>(
+    !isEdit && meta.assignableGroups.length === 1 ? meta.assignableGroups : []
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -573,6 +616,16 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
     setAssignees((a) =>
       isEdit ? [email] : a.includes(email) ? a.filter((x) => x !== email) : [...a, email]
     );
+  const toggleGroup = (g: Group) =>
+    setGroups((x) => (x.includes(g) ? x.filter((y) => y !== g) : [...x, g]));
+
+  // Turn the chosen audience into a concrete list of assignee emails.
+  const resolveAssignees = (): string[] => {
+    if (isEdit) return assignees.slice(0, 1);
+    if (scope === "club") return meta.allMembers.map((m) => m.email);
+    if (scope === "group") return meta.allMembers.filter((m) => groups.includes(m.group)).map((m) => m.email);
+    return assignees;
+  };
   const addTag = () => {
     const t = tagInput.trim().replace(/^#/, "");
     if (t && !tags.includes(t)) setTags([...tags, t]);
@@ -580,9 +633,14 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
   };
 
   async function submit() {
-    setErr(null); setBusy(true);
+    setErr(null);
+    const dueIso = dueAt ? new Date(dueAt).toISOString() : "";
+    if (!isEdit && resolveAssignees().length === 0) {
+      setErr("Pick who to assign this to.");
+      return;
+    }
+    setBusy(true);
     try {
-      const dueIso = dueAt ? new Date(dueAt).toISOString() : "";
       if (isEdit && editing) {
         await api(`/api/lms/tasks/${editing.id}`, {
           method: "PATCH",
@@ -594,7 +652,7 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
       } else {
         await api("/api/lms/tasks", {
           method: "POST",
-          body: JSON.stringify({ title, description, dueAt: dueIso, requiresFile, tags, assigneeEmails: assignees }),
+          body: JSON.stringify({ title, description, dueAt: dueIso, requiresFile, tags, assigneeEmails: resolveAssignees() }),
         });
       }
       onCreated();
@@ -631,14 +689,38 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
 
         <div>
           <label className={labelCls}>Assign to{isEdit ? " (pick one)" : ""}</label>
-          <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-pine/15 p-2">
-            {meta.assignableMembers.map((m) => (
-              <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-pine/5">
-                <input type="checkbox" checked={assignees.includes(m.email)} onChange={() => toggleAssignee(m.email)} />
-                {m.name} <span className="text-xs text-ink/40">· {GROUP_LABEL[m.group]}</span>
-              </label>
-            ))}
-          </div>
+          {isEdit ? (
+            <div className="mt-1">
+              <MemberPicker members={meta.assignableMembers} selected={assignees} onToggle={toggleAssignee} single />
+            </div>
+          ) : (
+            <div className="mt-1 space-y-3">
+              {scopes.length > 1 && (
+                <select className={inputCls} style={{ marginTop: 0 }} value={scope}
+                  onChange={(e) => setScope(e.target.value as "members" | "group" | "club")}>
+                  {scopes.map((s) => <option key={s} value={s}>{SCOPE_LABEL[s]}</option>)}
+                </select>
+              )}
+              {scope === "members" && (
+                <MemberPicker members={meta.assignableMembers} selected={assignees} onToggle={toggleAssignee} />
+              )}
+              {scope === "group" && (
+                <div className="flex flex-wrap gap-2">
+                  {meta.assignableGroups.map((g) => (
+                    <label key={g} className="flex items-center gap-1.5 rounded-full border border-pine/15 px-3 py-1 text-sm">
+                      <input type="checkbox" checked={groups.includes(g)} onChange={() => toggleGroup(g)} />
+                      {GROUP_LABEL[g]}
+                    </label>
+                  ))}
+                </div>
+              )}
+              {scope === "club" && (
+                <p className="rounded-xl border border-pine/15 bg-pine/[0.03] px-3 py-2 text-sm text-ink/70">
+                  This task will be assigned to all {meta.allMembers.length} club members.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <label className="flex items-center gap-2 text-sm text-ink/70">
@@ -663,7 +745,9 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
   const [startAt, setStartAt] = useState(editing ? toLocalInput(editing.startAt) : "");
   const [scopeKind, setScopeKind] = useState<Meta["eventScopes"][number]>(editing?.scopeKind ?? meta.eventScopes[0]);
   const [scopeEmails, setScopeEmails] = useState<string[]>(editing?.scopeEmails ?? []);
-  const [scopeGroups, setScopeGroups] = useState<Group[]>(editing?.scopeGroups ?? []);
+  const [scopeGroups, setScopeGroups] = useState<Group[]>(
+    editing?.scopeGroups ?? (meta.targetableGroups.length === 1 ? meta.targetableGroups : [])
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -719,14 +803,12 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
             {meta.eventMemberTargets.length === 0 ? (
               <p className="mt-1 text-xs text-ink/50">No members available to target.</p>
             ) : (
-              <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-pine/15 p-2">
-                {meta.eventMemberTargets.map((m) => (
-                  <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-pine/5">
-                    <input type="checkbox" checked={scopeEmails.includes(m.email)}
-                      onChange={() => setScopeEmails((x) => x.includes(m.email) ? x.filter((y) => y !== m.email) : [...x, m.email])} />
-                    {m.name} <span className="text-xs text-ink/40">· {GROUP_LABEL[m.group]}</span>
-                  </label>
-                ))}
+              <div className="mt-1">
+                <MemberPicker
+                  members={meta.eventMemberTargets}
+                  selected={scopeEmails}
+                  onToggle={(email) => setScopeEmails((x) => x.includes(email) ? x.filter((y) => y !== email) : [...x, email])}
+                />
               </div>
             )}
           </div>
