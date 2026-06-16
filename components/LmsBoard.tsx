@@ -21,6 +21,7 @@ type Meta = {
   assignableMembers: Lite[];
   eventScopes: Array<"members" | "group" | "club" | "all_newbies">;
   targetableGroups: Group[];
+  eventMemberTargets: Lite[];
   allMembers: Lite[];
 };
 type Task = {
@@ -58,6 +59,14 @@ const toLocalInput = (iso: string) => {
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
+// Calendar color coding: events (sage), tasks assigned TO me (marigold),
+// tasks assigned BY me to someone else (blue). Self-assigned counts as TO.
+const CAL_EVENT = { bg: "rgba(91,124,106,0.30)", fg: "#143628" };
+const CAL_TO = { bg: "rgba(226,160,47,0.40)", fg: "#5c3d00" };
+const CAL_BY = { bg: "rgba(70,107,176,0.28)", fg: "#1c3559" };
+const taskKind = (t: Task, email: string): "to" | "by" =>
+  t.assigneeEmail.toLowerCase() === email.toLowerCase() ? "to" : "by";
+
 async function api(url: string, opts?: RequestInit) {
   const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
   const data = await res.json().catch(() => ({}));
@@ -75,6 +84,8 @@ export default function LmsBoard() {
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editingEvent, setEditingEvent] = useState<ClubEvent | null>(null);
+  const [showPastTasks, setShowPastTasks] = useState(false);
+  const [showPastEvents, setShowPastEvents] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -106,6 +117,20 @@ export default function LmsBoard() {
     ),
     [tasks, myEmail]
   );
+  // Completed tasks move to the "past" archive; active lists show the rest.
+  const activeToMe = useMemo(() => assignedToMe.filter((t) => t.status !== "complete"), [assignedToMe]);
+  const activeByMe = useMemo(() => assignedByMe.filter((t) => t.status !== "complete"), [assignedByMe]);
+  const pastTasks = useMemo(
+    () => tasks.filter((t) => t.status === "complete")
+      .sort((a, b) => (b.submittedAt ?? b.dueAt).localeCompare(a.submittedAt ?? a.dueAt)),
+    [tasks]
+  );
+  const { upcomingEvents, pastEvents } = useMemo(() => {
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    const up = events.filter((e) => new Date(e.startAt) >= t0).sort((a, b) => a.startAt.localeCompare(b.startAt));
+    const pa = events.filter((e) => new Date(e.startAt) < t0).sort((a, b) => b.startAt.localeCompare(a.startAt));
+    return { upcomingEvents: up, pastEvents: pa };
+  }, [events]);
 
   async function act(taskId: string, action: "submit" | "approve") {
     try {
@@ -175,24 +200,34 @@ export default function LmsBoard() {
         <CalendarMonth tasks={tasks} events={events} myEmail={myEmail} />
       </div>
 
+      {/* archives */}
+      <div className="mt-6 flex flex-wrap gap-2">
+        <button onClick={() => setShowPastTasks(true)} className="btn-ghost text-sm">
+          Past tasks ({pastTasks.length})
+        </button>
+        <button onClick={() => setShowPastEvents(true)} className="btn-ghost text-sm">
+          Past events ({pastEvents.length})
+        </button>
+      </div>
+
       {/* lists */}
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <section>
           <h3 className="font-display text-xl font-semibold text-pine-deep">My tasks</h3>
           <div className="mt-4 space-y-3">
-            {assignedToMe.length === 0 && <Empty>No tasks assigned to you. Nice.</Empty>}
-            {assignedToMe.map((t) => (
+            {activeToMe.length === 0 && <Empty>No active tasks assigned to you. Nice.</Empty>}
+            {activeToMe.map((t) => (
               <TaskRow key={t.id} task={t} role="assignee"
                 onSubmit={() => act(t.id, "submit")}
                 onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)} />
             ))}
           </div>
 
-          {assignedByMe.length > 0 && (
+          {activeByMe.length > 0 && (
             <>
               <h3 className="mt-8 font-display text-xl font-semibold text-pine-deep">Assigned by me</h3>
               <div className="mt-4 space-y-3">
-                {assignedByMe.map((t) => (
+                {activeByMe.map((t) => (
                   <TaskRow key={t.id} task={t} role="assigner"
                     onApprove={() => act(t.id, "approve")}
                     onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)} />
@@ -203,10 +238,10 @@ export default function LmsBoard() {
         </section>
 
         <section>
-          <h3 className="font-display text-xl font-semibold text-pine-deep">Events</h3>
+          <h3 className="font-display text-xl font-semibold text-pine-deep">Upcoming events</h3>
           <div className="mt-4 space-y-3">
-            {events.length === 0 && <Empty>No upcoming events.</Empty>}
-            {[...events].sort((a, b) => a.startAt.localeCompare(b.startAt)).map((e) => (
+            {upcomingEvents.length === 0 && <Empty>No upcoming events.</Empty>}
+            {upcomingEvents.map((e) => (
               <div key={e.id} className="rounded-2xl border border-pine/12 bg-paper p-4">
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-semibold text-ink">{e.title}</p>
@@ -242,6 +277,57 @@ export default function LmsBoard() {
       {(showEventForm || editingEvent) && (
         <EventForm meta={meta} editing={editingEvent} onClose={() => { setShowEventForm(false); setEditingEvent(null); }}
           onCreated={() => { setShowEventForm(false); setEditingEvent(null); load(); }} />
+      )}
+
+      {showPastTasks && (
+        <Modal title="Past tasks" onClose={() => setShowPastTasks(false)}>
+          {pastTasks.length === 0 ? (
+            <p className="text-sm text-ink/50">No completed tasks yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {pastTasks.map((t) => {
+                const late = t.submittedAt && new Date(t.submittedAt) > new Date(t.dueAt);
+                const kind = taskKind(t, myEmail);
+                return (
+                  <div key={t.id} className="rounded-xl border border-pine/12 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-ink">{t.title}</span>
+                      <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        style={{ backgroundColor: kind === "to" ? CAL_TO.bg : CAL_BY.bg, color: kind === "to" ? CAL_TO.fg : CAL_BY.fg }}>
+                        {kind === "to" ? "To me" : "By me"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-ink/50">
+                      Due {fmtDateTime(t.dueAt)}
+                      {t.submittedAt && (
+                        <span className={late ? "font-semibold text-red-600" : ""}> · Completed {fmtDateTime(t.submittedAt)}{late ? " (late)" : ""}</span>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Modal>
+      )}
+      {showPastEvents && (
+        <Modal title="Past events" onClose={() => setShowPastEvents(false)}>
+          {pastEvents.length === 0 ? (
+            <p className="text-sm text-ink/50">No past events.</p>
+          ) : (
+            <div className="space-y-2">
+              {pastEvents.map((e) => (
+                <div key={e.id} className="rounded-xl border border-pine/12 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-ink">{e.title}</span>
+                    <span className="shrink-0 text-xs text-ink/50">{fmtDateTime(e.startAt)}</span>
+                  </div>
+                  {e.description && <p className="mt-1 text-xs text-ink/60">{e.description}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );
@@ -323,8 +409,9 @@ function TaskRow({
 }
 
 // --------------------------------------------------------------------- calendar
-function CalendarMonth({ tasks, events }: { tasks: Task[]; events: ClubEvent[]; myEmail: string }) {
+function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: ClubEvent[]; myEmail: string }) {
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [openDay, setOpenDay] = useState<Date | null>(null);
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const first = new Date(year, month, 1);
@@ -335,6 +422,9 @@ function CalendarMonth({ tasks, events }: { tasks: Task[]; events: ClubEvent[]; 
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
   while (cells.length % 7 !== 0) cells.push(null);
   const today = new Date();
+
+  const dayTasksFor = (date: Date) => tasks.filter((t) => sameDay(new Date(t.dueAt), date));
+  const dayEventsFor = (date: Date) => events.filter((e) => sameDay(new Date(e.startAt), date));
 
   return (
     <div className="rounded-3xl border border-pine/12 bg-paper p-5">
@@ -354,31 +444,95 @@ function CalendarMonth({ tasks, events }: { tasks: Task[]; events: ClubEvent[]; 
       <div className="mt-1 grid grid-cols-7 gap-1">
         {cells.map((date, i) => {
           if (!date) return <div key={i} className="aspect-square rounded-lg" />;
-          const dayTasks = tasks.filter((t) => sameDay(new Date(t.dueAt), date));
-          const dayEvents = events.filter((e) => sameDay(new Date(e.startAt), date));
+          const dayTasks = dayTasksFor(date);
+          const dayEvents = dayEventsFor(date);
           const isToday = sameDay(today, date);
+          const total = dayTasks.length + dayEvents.length;
           return (
-            <div key={i} className={`aspect-square rounded-lg border p-1 text-left ${isToday ? "border-marigold bg-marigold-soft/20" : "border-pine/8 bg-pine/[0.015]"}`}>
+            <button
+              key={i}
+              type="button"
+              onClick={() => setOpenDay(date)}
+              className={`aspect-square rounded-lg border p-1 text-left transition-colors hover:border-pine/40 ${isToday ? "border-marigold bg-marigold-soft/20" : "border-pine/8 bg-pine/[0.015]"}`}
+            >
               <div className={`text-[11px] font-semibold ${isToday ? "text-marigold-deep" : "text-ink/55"}`}>{date.getDate()}</div>
               <div className="mt-0.5 space-y-0.5">
-                {dayEvents.slice(0, 2).map((e) => (
-                  <div key={e.id} className="truncate rounded bg-sage/25 px-1 text-[9px] font-medium text-pine-deep" title={e.title}>{e.title}</div>
+                {dayEvents.slice(0, 1).map((e) => (
+                  <div key={e.id} className="truncate rounded px-1 text-[9px] font-medium" style={{ backgroundColor: CAL_EVENT.bg, color: CAL_EVENT.fg }} title={e.title}>{e.title}</div>
                 ))}
-                {dayTasks.slice(0, 2).map((t) => (
-                  <div key={t.id} className="truncate rounded bg-marigold/30 px-1 text-[9px] font-medium text-pine-deep" title={t.title}>{t.title}</div>
-                ))}
-                {dayTasks.length + dayEvents.length > 4 && (
-                  <div className="text-[9px] text-ink/40">+{dayTasks.length + dayEvents.length - 4} more</div>
-                )}
+                {dayTasks.slice(0, 2).map((t) => {
+                  const c = taskKind(t, myEmail) === "to" ? CAL_TO : CAL_BY;
+                  return (
+                    <div key={t.id} className="truncate rounded px-1 text-[9px] font-medium" style={{ backgroundColor: c.bg, color: c.fg }} title={t.title}>{t.title}</div>
+                  );
+                })}
+                {total > 3 && <div className="text-[9px] text-ink/40">+{total - 3} more</div>}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
-      <div className="mt-3 flex gap-4 text-[11px] text-ink/50">
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-sage/40" /> Event</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-marigold/50" /> Task due</span>
+      <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-ink/50">
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: CAL_EVENT.bg }} /> Event</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: CAL_TO.bg }} /> Task to me</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: CAL_BY.bg }} /> Task by me</span>
       </div>
+
+      {openDay && (
+        <Modal title={openDay.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} onClose={() => setOpenDay(null)}>
+          {(() => {
+            const dEvents = dayEventsFor(openDay);
+            const dTasks = dayTasksFor(openDay);
+            if (dEvents.length + dTasks.length === 0)
+              return <p className="text-sm text-ink/50">Nothing scheduled for this day.</p>;
+            return (
+              <div className="space-y-4">
+                {dEvents.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink/40">Events</p>
+                    <div className="mt-2 space-y-2">
+                      {dEvents.map((e) => (
+                        <div key={e.id} className="rounded-xl border border-pine/12 p-3">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: CAL_EVENT.bg }} />
+                            <span className="font-medium text-ink">{e.title}</span>
+                            <span className="ml-auto text-xs text-ink/50">{fmtDateTime(e.startAt)}</span>
+                          </div>
+                          {e.description && <p className="mt-1 text-xs text-ink/60">{e.description}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {dTasks.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink/40">Tasks due</p>
+                    <div className="mt-2 space-y-2">
+                      {dTasks.map((t) => {
+                        const k = taskKind(t, myEmail);
+                        const c = k === "to" ? CAL_TO : CAL_BY;
+                        return (
+                          <div key={t.id} className="rounded-xl border border-pine/12 p-3">
+                            <div className="flex items-center gap-2">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: c.bg }} />
+                              <span className="font-medium text-ink">{t.title}</span>
+                              <span className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: c.bg, color: c.fg }}>{k === "to" ? "To me" : "By me"}</span>
+                            </div>
+                            <p className="mt-1 text-xs text-ink/50">
+                              {t.status === "complete" ? "Complete" : t.status === "pending" ? "Pending approval" : "Not yet complete"} · Due {fmtDateTime(t.dueAt)}
+                            </p>
+                            {t.description && <p className="mt-1 text-xs text-ink/60">{t.description}</p>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
     </div>
   );
 }
@@ -562,15 +716,19 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
         {scopeKind === "members" && (
           <div>
             <label className={labelCls}>Which members?</label>
-            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-pine/15 p-2">
-              {meta.allMembers.map((m) => (
-                <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-pine/5">
-                  <input type="checkbox" checked={scopeEmails.includes(m.email)}
-                    onChange={() => setScopeEmails((x) => x.includes(m.email) ? x.filter((y) => y !== m.email) : [...x, m.email])} />
-                  {m.name} <span className="text-xs text-ink/40">· {GROUP_LABEL[m.group]}</span>
-                </label>
-              ))}
-            </div>
+            {meta.eventMemberTargets.length === 0 ? (
+              <p className="mt-1 text-xs text-ink/50">No members available to target.</p>
+            ) : (
+              <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-pine/15 p-2">
+                {meta.eventMemberTargets.map((m) => (
+                  <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-pine/5">
+                    <input type="checkbox" checked={scopeEmails.includes(m.email)}
+                      onChange={() => setScopeEmails((x) => x.includes(m.email) ? x.filter((y) => y !== m.email) : [...x, m.email])} />
+                    {m.name} <span className="text-xs text-ink/40">· {GROUP_LABEL[m.group]}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

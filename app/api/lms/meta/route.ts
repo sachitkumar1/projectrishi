@@ -7,6 +7,7 @@ import {
   canAssignTasks,
   canCreateEvents,
   targetableGroups,
+  targetableMembers,
 } from "@/lib/lms/permissions";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export async function GET() {
     assignableMembers: assignableMembers(me).map(lite),
     eventScopes: allowedEventScopes(me),
     targetableGroups: targetableGroups(me),
+    eventMemberTargets: targetableMembers(me).map(lite),
     allMembers: MEMBERS.map(lite),
   });
 }

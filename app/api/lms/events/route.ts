@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
-import { allowedEventScopes, canManageEvent, targetableGroups } from "@/lib/lms/permissions";
+import { allowedEventScopes, canManageEvent, canTargetMembers, targetableGroups } from "@/lib/lms/permissions";
 import { createEvent, listEventsForMember } from "@/lib/lms/store";
 import type { NewEventInput, ProjectGroup } from "@/lib/lms/types";
 
@@ -43,6 +43,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "You can't target those groups." }, { status: 403 });
   }
 
+  // Enforce: for "specific members" events, only members they may target
+  // (a Lead is limited to their own project group).
+  const scopeEmails = Array.isArray(body.scopeEmails) ? body.scopeEmails : [];
+  if (scopeKind === "members") {
+    if (scopeEmails.length === 0)
+      return NextResponse.json({ error: "Pick at least one member." }, { status: 400 });
+    if (!canTargetMembers(me, scopeEmails))
+      return NextResponse.json(
+        { error: "You can only create events for members of your own project group." },
+        { status: 403 }
+      );
+  }
+
   const event = await createEvent(
     {
       title,
@@ -50,7 +63,7 @@ export async function POST(req: Request) {
       startAt: body.startAt,
       endAt: body.endAt ?? null,
       scopeKind,
-      scopeEmails: Array.isArray(body.scopeEmails) ? body.scopeEmails : [],
+      scopeEmails,
       scopeGroups,
     },
     me.email

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
-import { allowedEventScopes, canManageEvent, targetableGroups } from "@/lib/lms/permissions";
+import { allowedEventScopes, canManageEvent, canTargetMembers, targetableGroups } from "@/lib/lms/permissions";
 import { deleteEvent, getEvent, updateEvent } from "@/lib/lms/store";
 import type { ProjectGroup } from "@/lib/lms/types";
 
@@ -37,6 +37,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (scopeGroups.length === 0 || scopeGroups.some((g) => !allowed.includes(g)))
       return NextResponse.json({ error: "You can't target those groups." }, { status: 403 });
   }
+  const scopeEmails = Array.isArray(body.scopeEmails) ? (body.scopeEmails as string[]) : [];
+  if (scopeKind === "members") {
+    if (scopeEmails.length === 0)
+      return NextResponse.json({ error: "Pick at least one member." }, { status: 400 });
+    if (!canTargetMembers(me, scopeEmails))
+      return NextResponse.json(
+        { error: "You can only create events for members of your own project group." },
+        { status: 403 }
+      );
+  }
 
   const updated = await updateEvent(event.id, {
     title,
@@ -44,7 +54,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     startAt,
     endAt: (body.endAt as string) ?? null,
     scopeKind,
-    scopeEmails: Array.isArray(body.scopeEmails) ? (body.scopeEmails as string[]) : [],
+    scopeEmails,
     scopeGroups,
   });
   return NextResponse.json({ event: updated });

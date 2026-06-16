@@ -43,27 +43,25 @@ function roles(flags: Partial<RoleFlags>): RoleFlags {
 }
 
 export const MEMBERS: Member[] = [
-  {
-    email: "sachitk@berkeley.edu",
-    firstName: "Sachit",
-    lastName: "Kumar",
-    group: "E",
-    roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true }),
-  },
-  {
-    email: "palakprabhakar1@berkeley.edu",
-    firstName: "Palak",
-    lastName: "Prabhakar",
-    group: "W",
-    roles: roles({ lead: true }),
-  },
-  // {
-  //   email: "newmember@berkeley.edu",
-  //   firstName: "New",
-  //   lastName: "Member",
-  //   group: "R",
-  //   roles: roles({ newbie: true }),
-  // },
+  { email: "sachitk@berkeley.edu", firstName: "Sachit", lastName: "Kumar", group: "E", roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true }) },
+  { email: "palakprabhakar1@berkeley.edu", firstName: "Palak", lastName: "Prabhakar", group: "W", roles: roles({ lead: true }) },
+  { email: "thanuj@berkeley.edu", firstName: "Thanuj", lastName: "Komatireddy", group: "H", roles: roles({ exec: true }) },
+  { email: "riaprathinidhi1@berkeley.edu", firstName: "Ria", lastName: "Prathinidhi", group: "R", roles: roles({ lead: true }) },
+  { email: "aarushimupparti@berkeley.edu", firstName: "Aarushi", lastName: "Mupparti", group: "H", roles: roles({ lead: true }) },
+  { email: "arnavmishra@berkeley.edu", firstName: "Arnav", lastName: "Mishra", group: "R", roles: roles({}) },
+  { email: "megha_ramachandran@berkeley.edu", firstName: "Megha", lastName: "Ramachandran", group: "E", roles: roles({ lead: true }) },
+  { email: "nikita_jadhav@berkeley.edu", firstName: "Nikita", lastName: "Jadhav", group: "W", roles: roles({ exec: true }) },
+  { email: "autkarsh@berkeley.edu", firstName: "Utkarsh", lastName: "Aggarwal", group: "E", roles: roles({ lead: true }) },
+  { email: "tanyagoel101@berkeley.edu", firstName: "Tanya", lastName: "Goel", group: "H", roles: roles({ vpp: true, exec: true }) },
+  { email: "grishma_jain@berkeley.edu", firstName: "Grishma", lastName: "Jain", group: "E", roles: roles({ vpp: true, exec: true }) },
+  { email: "akotte@berkeley.edu", firstName: "Advik", lastName: "Kotte", group: "W", roles: roles({ nmtLeader: true }) },
+  { email: "aryaprince@berkeley.edu", firstName: "Arya", lastName: "Prince", group: "E", roles: roles({}) },
+  { email: "platy07@berkeley.edu", firstName: "Maia", lastName: "Berges", group: "R", roles: roles({ lead: true }) },
+  { email: "sachitkumar2025@gmail.com", firstName: "SachitLead", lastName: "Kumar", group: "W", roles: roles({ lead: true }) },
+  { email: "sachitkumar2020@gmail.com", firstName: "SachitInternal", lastName: "Kumar", group: "W", roles: roles({ internal: true }) },
+  { email: "kumarsachit2007@gmail.com", firstName: "SachitNMT", lastName: "Kumar", group: "W", roles: roles({ nmtLeader: true }) },
+  { email: "anonymousposter1029@gmail.com", firstName: "SachitNewbie", lastName: "Kumar", group: "W", roles: roles({ newbie: true }) },
+  { email: "ryancr@berkeley.edu", firstName: "Ryan", lastName: "Raphael", group: "E", roles: roles({ vpp: true, exec: true }) },
 ];
 
 /** Look up a member by email (case-insensitive). Returns undefined if not allowed. */

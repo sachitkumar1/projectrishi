@@ -79,6 +79,32 @@ export function targetableGroups(m: Member): ProjectGroup[] {
   return [];
 }
 
+/**
+ * Which individual members this person may pick when creating a
+ * "specific members" event.
+ *   - Internal / VP/P → anyone in the club.
+ *   - Lead           → only members of their OWN project group.
+ *   - NMT leader     → newbies (NMT events target new members).
+ * Roles stack (e.g. a Lead who is also an NMT leader gets both sets).
+ */
+export function targetableMembers(m: Member): Member[] {
+  if (m.roles.internal || m.roles.vpp) return MEMBERS;
+  const picked = new Map<string, Member>();
+  if (m.roles.lead) {
+    MEMBERS.filter((x) => x.group === m.group).forEach((x) => picked.set(x.email, x));
+  }
+  if (m.roles.nmtLeader) {
+    MEMBERS.filter((x) => x.roles.newbie).forEach((x) => picked.set(x.email, x));
+  }
+  return Array.from(picked.values());
+}
+
+/** Server-side check: may this member target exactly these emails with a "members" event? */
+export function canTargetMembers(m: Member, emails: string[]): boolean {
+  const allowed = new Set(targetableMembers(m).map((x) => x.email.toLowerCase()));
+  return emails.every((e) => allowed.has(e.trim().toLowerCase()));
+}
+
 // ----------------------------------------------------------- edit / delete
 //  Who may edit or delete an existing task/event.
 //   - The person who CREATED it (assigner of a task / creator of an event).
