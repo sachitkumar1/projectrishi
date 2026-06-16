@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import Reveal from "@/components/Reveal";
 import Contours from "@/components/Contours";
+import LmsBoard from "@/components/LmsBoard";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -72,18 +73,34 @@ export default function DashboardPage() {
             </Link>
           </Reveal>
 
-          {/* Placeholder for future tools */}
+          {/* Lineage's neighbor: quick intro to the board below */}
           <Reveal delay={0.1}>
-            <div className="flex h-full flex-col justify-center rounded-3xl border border-dashed border-pine/25 bg-pine/[0.02] p-8 text-center">
+            <div className="flex h-full flex-col justify-center rounded-3xl border border-pine/15 bg-marigold-soft/20 p-8">
               <p className="font-display text-lg font-semibold text-pine-deep">
-                More coming soon
+                Your tasks &amp; calendar
               </p>
-              <p className="mx-auto mt-2 max-w-xs text-sm text-ink/55">
-                Tasks, calendar, meeting notes, and announcements will live here.
+              <p className="mt-2 max-w-xs text-sm text-ink/60">
+                Everything assigned to you, plus events for your group and the
+                club, are gathered just below.
               </p>
             </div>
           </Reveal>
         </div>
+      </section>
+
+      {/* LMS board */}
+      <section className="container-rishi pb-20">
+        <Reveal>
+          <h2 className="font-display text-3xl font-semibold text-pine-deep">
+            Tasks &amp; Events
+          </h2>
+          <p className="mt-2 text-ink/60">
+            Assign and track work, and see everything on your personal calendar.
+          </p>
+          <div className="mt-8">
+            <LmsBoard />
+          </div>
+        </Reveal>
       </section>
     </>
   );

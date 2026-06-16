@@ -1,27 +1,69 @@
 /**
  * ============================================================================
- *  MEMBER ALLOWLIST
+ *  MEMBER ALLOWLIST + ROLES
  * ============================================================================
- *  ONLY the emails listed here can log in to the Member Dashboard.
- *  This list is checked on the server when someone signs in with Google, so
- *  it cannot be bypassed from the browser.
+ *  ONLY the emails listed here can log in to the Member Dashboard. This list
+ *  is checked on the server when someone signs in with Google, so it cannot be
+ *  bypassed from the browser.
  *
- *  TO ADD / REMOVE A MEMBER: just edit the MEMBERS array below. Use the
- *  member's Google (school) email, exactly as they sign in with. Capitalization
- *  doesn't matter — emails are compared case-insensitively.
+ *  Each member also has a PROJECT GROUP and a set of ROLES, used by the LMS to
+ *  decide what they can do (assign tasks, create events, etc.).
+ *
+ *  PROJECT GROUP codes:  E = Education,  R = Water & Sanitation,
+ *                        W = Women's Empowerment,  H = Health
+ *  ROLES (Y/N in the spreadsheet):  nmtLeader, newbie, lead, internal,
+ *                        vpp (VP/President), exec
+ *
+ *  TO ADD A MEMBER: copy a line below, fill in their email, name, group, and
+ *  roles. Capitalization of the email doesn't matter.
  * ============================================================================
  */
+
+import type { ProjectGroup, RoleFlags } from "@/lib/lms/types";
 
 export type Member = {
   email: string;
   firstName: string;
   lastName: string;
+  group: ProjectGroup;
+  roles: RoleFlags;
 };
 
+// Small helper so the list below stays short and readable.
+function roles(flags: Partial<RoleFlags>): RoleFlags {
+  return {
+    nmtLeader: false,
+    newbie: false,
+    lead: false,
+    internal: false,
+    vpp: false,
+    exec: false,
+    ...flags,
+  };
+}
+
 export const MEMBERS: Member[] = [
-  { email: "sachitk@berkeley.edu", firstName: "Sachit", lastName: "Kumar" },
-  { email: "palakprabhakar1@berkeley.edu", firstName: "Palak", lastName: "Prabhakar" },
-  // { email: "newmember@berkeley.edu", firstName: "New", lastName: "Member" },
+  {
+    email: "sachitk@berkeley.edu",
+    firstName: "Sachit",
+    lastName: "Kumar",
+    group: "E",
+    roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true }),
+  },
+  {
+    email: "palakprabhakar1@berkeley.edu",
+    firstName: "Palak",
+    lastName: "Prabhakar",
+    group: "W",
+    roles: roles({ lead: true }),
+  },
+  // {
+  //   email: "newmember@berkeley.edu",
+  //   firstName: "New",
+  //   lastName: "Member",
+  //   group: "R",
+  //   roles: roles({ newbie: true }),
+  // },
 ];
 
 /** Look up a member by email (case-insensitive). Returns undefined if not allowed. */

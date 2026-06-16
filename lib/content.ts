@@ -324,10 +324,10 @@ export const APPLY = {
   termLabel: "Fall 2026 Recruitment",
   // Recruitment timeline — edit dates each cycle.
   timeline: [
-    { label: "Coffee Chats", value: "Aug 28 – Sep 5" },
-    { label: "Info Session #1", value: "Sep 4" },
-    { label: "Info Session #2", value: "Sep 11" },
-    { label: "Applications Due", value: "Sep 12" },
+    { label: "Coffee Chats", value: "TBD" },
+    { label: "Info Session #1", value: "TBD" },
+    { label: "Info Session #2", value: "TBD" },
+    { label: "Applications Due", value: "TBD" },
   ],
   blurb:
     "We recruit at the start of the Fall and Spring semesters. Come meet us at a coffee chat or info session, then submit your application below.",

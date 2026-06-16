@@ -1,0 +1,584 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+// ----- types mirrored from the API JSON -----
+type Group = "E" | "R" | "W" | "H";
+const GROUP_LABEL: Record<Group, string> = {
+  E: "Education",
+  R: "Water & Sanitation",
+  W: "Women's Empowerment",
+  H: "Health",
+};
+type Roles = {
+  nmtLeader: boolean; newbie: boolean; lead: boolean;
+  internal: boolean; vpp: boolean; exec: boolean;
+};
+type Lite = { email: string; name: string; group: Group };
+type Meta = {
+  me: { email: string; name: string; group: Group; roles: Roles };
+  can: { assignTasks: boolean; createEvents: boolean };
+  assignableMembers: Lite[];
+  eventScopes: Array<"members" | "group" | "club" | "all_newbies">;
+  targetableGroups: Group[];
+  allMembers: Lite[];
+};
+type Task = {
+  id: string; title: string; description: string; tags: string[];
+  dueAt: string; requiresFile: boolean; assignerEmail: string;
+  assigneeEmail: string; status: "not_complete" | "pending" | "complete";
+  submittedAt: string | null; createdAt: string; canManage?: boolean;
+};
+type ClubEvent = {
+  id: string; title: string; description: string; startAt: string;
+  endAt: string | null; creatorEmail: string;
+  scopeKind: "members" | "group" | "club" | "all_newbies";
+  scopeEmails: string[]; scopeGroups: Group[]; createdAt: string; canManage?: boolean;
+};
+
+const SCOPE_LABEL: Record<Meta["eventScopes"][number], string> = {
+  members: "Specific members",
+  group: "A project group",
+  club: "The whole club",
+  all_newbies: "All newbies",
+};
+
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const fmtDateTime = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+// ISO -> value for <input type="datetime-local"> (local time, no seconds)
+const toLocalInput = (iso: string) => {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+async function api(url: string, opts?: RequestInit) {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "Something went wrong");
+  return data;
+}
+
+export default function LmsBoard() {
+  const [meta, setMeta] = useState<Meta | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [events, setEvents] = useState<ClubEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editingEvent, setEditingEvent] = useState<ClubEvent | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [m, t, e] = await Promise.all([
+        api("/api/lms/meta"),
+        api("/api/lms/tasks"),
+        api("/api/lms/events"),
+      ]);
+      setMeta(m); setTasks(t.tasks); setEvents(e.events); setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const myEmail = meta?.me.email ?? "";
+  const assignedToMe = useMemo(
+    () => tasks.filter((t) => t.assigneeEmail.toLowerCase() === myEmail.toLowerCase()),
+    [tasks, myEmail]
+  );
+  const assignedByMe = useMemo(
+    () => tasks.filter(
+      (t) => t.assignerEmail.toLowerCase() === myEmail.toLowerCase()
+        && t.assigneeEmail.toLowerCase() !== myEmail.toLowerCase()
+    ),
+    [tasks, myEmail]
+  );
+
+  async function act(taskId: string, action: "submit" | "approve") {
+    try {
+      await api(`/api/lms/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ action }) });
+      await load();
+    } catch (err) { alert((err as Error).message); }
+  }
+
+  async function removeTask(taskId: string) {
+    if (!confirm("Delete this task? This can't be undone.")) return;
+    try {
+      await api(`/api/lms/tasks/${taskId}`, { method: "DELETE" });
+      await load();
+    } catch (err) { alert((err as Error).message); }
+  }
+
+  async function removeEvent(eventId: string) {
+    if (!confirm("Delete this event? This can't be undone.")) return;
+    try {
+      await api(`/api/lms/events/${eventId}`, { method: "DELETE" });
+      await load();
+    } catch (err) { alert((err as Error).message); }
+  }
+
+  if (loading) return <p className="text-sm text-ink/50">Loading your dashboard…</p>;
+  if (error)
+    return (
+      <div className="rounded-2xl border border-marigold-deep/30 bg-marigold-soft/20 p-5 text-sm text-ink/80">
+        {error === "Not authorized" ? "Please sign in to view your tasks and events." : error}
+      </div>
+    );
+  if (!meta) return null;
+
+  const roleBadges = Object.entries(meta.me.roles)
+    .filter(([, v]) => v)
+    .map(([k]) => ({
+      nmtLeader: "NMT Leader", newbie: "Newbie", lead: "Lead",
+      internal: "Internal", vpp: "VP/President", exec: "Exec",
+    }[k] as string));
+
+  return (
+    <div>
+      {/* identity + actions */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-pine px-3 py-1 text-xs font-semibold text-paper">
+            {GROUP_LABEL[meta.me.group]}
+          </span>
+          {roleBadges.map((b) => (
+            <span key={b} className="rounded-full border border-pine/20 bg-pine/[0.04] px-3 py-1 text-xs font-medium text-pine-deep">
+              {b}
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          {meta.can.assignTasks && (
+            <button onClick={() => setShowTaskForm(true)} className="btn-primary text-sm">+ Assign task</button>
+          )}
+          {meta.can.createEvents && (
+            <button onClick={() => setShowEventForm(true)} className="btn-accent text-sm">+ Create event</button>
+          )}
+        </div>
+      </div>
+
+      {/* calendar */}
+      <div className="mt-8">
+        <CalendarMonth tasks={tasks} events={events} myEmail={myEmail} />
+      </div>
+
+      {/* lists */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-2">
+        <section>
+          <h3 className="font-display text-xl font-semibold text-pine-deep">My tasks</h3>
+          <div className="mt-4 space-y-3">
+            {assignedToMe.length === 0 && <Empty>No tasks assigned to you. Nice.</Empty>}
+            {assignedToMe.map((t) => (
+              <TaskRow key={t.id} task={t} role="assignee"
+                onSubmit={() => act(t.id, "submit")}
+                onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)} />
+            ))}
+          </div>
+
+          {assignedByMe.length > 0 && (
+            <>
+              <h3 className="mt-8 font-display text-xl font-semibold text-pine-deep">Assigned by me</h3>
+              <div className="mt-4 space-y-3">
+                {assignedByMe.map((t) => (
+                  <TaskRow key={t.id} task={t} role="assigner"
+                    onApprove={() => act(t.id, "approve")}
+                    onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)} />
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        <section>
+          <h3 className="font-display text-xl font-semibold text-pine-deep">Events</h3>
+          <div className="mt-4 space-y-3">
+            {events.length === 0 && <Empty>No upcoming events.</Empty>}
+            {[...events].sort((a, b) => a.startAt.localeCompare(b.startAt)).map((e) => (
+              <div key={e.id} className="rounded-2xl border border-pine/12 bg-paper p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-semibold text-ink">{e.title}</p>
+                  <span className="shrink-0 rounded-full bg-sage/15 px-2.5 py-1 text-xs font-medium text-pine-deep">
+                    {fmtDateTime(e.startAt)}
+                  </span>
+                </div>
+                {e.description && <p className="mt-1 text-sm text-ink/70">{e.description}</p>}
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="text-xs text-ink/45">
+                    {e.scopeKind === "club" && "Whole club"}
+                    {e.scopeKind === "all_newbies" && "All newbies"}
+                    {e.scopeKind === "group" && `Groups: ${e.scopeGroups.map((g) => GROUP_LABEL[g]).join(", ")}`}
+                    {e.scopeKind === "members" && `${e.scopeEmails.length} member(s)`}
+                  </p>
+                  {e.canManage && (
+                    <div className="flex gap-1">
+                      <button onClick={() => setEditingEvent(e)} className="rounded-full px-2 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Edit</button>
+                      <button onClick={() => removeEvent(e.id)} className="rounded-full px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      {(showTaskForm || editingTask) && (
+        <TaskForm meta={meta} editing={editingTask} onClose={() => { setShowTaskForm(false); setEditingTask(null); }}
+          onCreated={() => { setShowTaskForm(false); setEditingTask(null); load(); }} />
+      )}
+      {(showEventForm || editingEvent) && (
+        <EventForm meta={meta} editing={editingEvent} onClose={() => { setShowEventForm(false); setEditingEvent(null); }}
+          onCreated={() => { setShowEventForm(false); setEditingEvent(null); load(); }} />
+      )}
+    </div>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="rounded-2xl border border-dashed border-pine/15 bg-pine/[0.02] p-4 text-sm text-ink/45">{children}</p>;
+}
+
+// --------------------------------------------------------------------- task row
+function TaskRow({
+  task, role, onSubmit, onApprove, onEdit, onDelete,
+}: {
+  task: Task; role: "assignee" | "assigner";
+  onSubmit?: () => void; onApprove?: () => void; onEdit?: () => void; onDelete?: () => void;
+}) {
+  const overdue = task.submittedAt
+    ? new Date(task.submittedAt) > new Date(task.dueAt)
+    : new Date() > new Date(task.dueAt) && task.status !== "complete";
+
+  const statusChip =
+    task.status === "complete" ? (
+      <span className="rounded-full bg-pine px-2.5 py-1 text-xs font-semibold text-paper">Complete</span>
+    ) : task.status === "pending" ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-marigold-soft px-2.5 py-1 text-xs font-semibold text-marigold-deep">
+        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+        Pending
+      </span>
+    ) : (
+      <span className="rounded-full border border-ink/15 px-2.5 py-1 text-xs font-medium text-ink/55">Not yet complete</span>
+    );
+
+  return (
+    <div className="rounded-2xl border border-pine/12 bg-paper p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-semibold text-ink">{task.title}</p>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {statusChip}
+          {task.canManage && (onEdit || onDelete) && (
+            <span className="ml-1 flex gap-0.5">
+              {onEdit && task.status !== "complete" && <button onClick={onEdit} title="Edit task" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-pine/5 hover:text-pine-deep">✎</button>}
+              {onDelete && <button onClick={onDelete} title="Delete task" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-red-50 hover:text-red-600">🗑</button>}
+            </span>
+          )}
+        </div>
+      </div>
+      {task.description && <p className="mt-1 text-sm text-ink/70">{task.description}</p>}
+
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {task.tags.map((tag) => (
+          <span key={tag} className="rounded-full bg-sage/15 px-2 py-0.5 text-[11px] font-medium text-pine-deep">#{tag}</span>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="text-ink/50">Due {fmtDateTime(task.dueAt)}</span>
+        {task.submittedAt && (
+          <span className={overdue ? "font-semibold text-red-600" : "text-ink/50"}>
+            Submitted {fmtDateTime(task.submittedAt)}{overdue ? " (late)" : ""}
+          </span>
+        )}
+      </div>
+
+      {role === "assignee" && task.status === "not_complete" && (
+        <button onClick={onSubmit} className="mt-3 rounded-full bg-pine px-4 py-2 text-xs font-semibold text-paper transition-transform hover:scale-[1.02]">
+          Mark complete
+        </button>
+      )}
+      {role === "assigner" && task.status === "pending" && (
+        <button onClick={onApprove} className="mt-3 rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep transition-transform hover:scale-[1.02]">
+          Approve as complete
+        </button>
+      )}
+      {role === "assigner" && task.status === "not_complete" && (
+        <p className="mt-3 text-xs text-ink/40">Waiting on {task.assigneeEmail}…</p>
+      )}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------- calendar
+function CalendarMonth({ tasks, events }: { tasks: Task[]; events: ClubEvent[]; myEmail: string }) {
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const first = new Date(year, month, 1);
+  const startWeekday = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+  const today = new Date();
+
+  return (
+    <div className="rounded-3xl border border-pine/12 bg-paper p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-xl font-semibold text-pine-deep">
+          {cursor.toLocaleString(undefined, { month: "long", year: "numeric" })}
+        </h3>
+        <div className="flex gap-1">
+          <button onClick={() => setCursor(new Date(year, month - 1, 1))} className="grid h-8 w-8 place-items-center rounded-full border border-pine/15 text-pine-deep hover:bg-pine/5" aria-label="Previous month">‹</button>
+          <button onClick={() => setCursor(new Date(year, month + 1, 1))} className="grid h-8 w-8 place-items-center rounded-full border border-pine/15 text-pine-deep hover:bg-pine/5" aria-label="Next month">›</button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <div key={d}>{d}</div>)}
+      </div>
+      <div className="mt-1 grid grid-cols-7 gap-1">
+        {cells.map((date, i) => {
+          if (!date) return <div key={i} className="aspect-square rounded-lg" />;
+          const dayTasks = tasks.filter((t) => sameDay(new Date(t.dueAt), date));
+          const dayEvents = events.filter((e) => sameDay(new Date(e.startAt), date));
+          const isToday = sameDay(today, date);
+          return (
+            <div key={i} className={`aspect-square rounded-lg border p-1 text-left ${isToday ? "border-marigold bg-marigold-soft/20" : "border-pine/8 bg-pine/[0.015]"}`}>
+              <div className={`text-[11px] font-semibold ${isToday ? "text-marigold-deep" : "text-ink/55"}`}>{date.getDate()}</div>
+              <div className="mt-0.5 space-y-0.5">
+                {dayEvents.slice(0, 2).map((e) => (
+                  <div key={e.id} className="truncate rounded bg-sage/25 px-1 text-[9px] font-medium text-pine-deep" title={e.title}>{e.title}</div>
+                ))}
+                {dayTasks.slice(0, 2).map((t) => (
+                  <div key={t.id} className="truncate rounded bg-marigold/30 px-1 text-[9px] font-medium text-pine-deep" title={t.title}>{t.title}</div>
+                ))}
+                {dayTasks.length + dayEvents.length > 4 && (
+                  <div className="text-[9px] text-ink/40">+{dayTasks.length + dayEvents.length - 4} more</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex gap-4 text-[11px] text-ink/50">
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-sage/40" /> Event</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-marigold/50" /> Task due</span>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------- modal shell
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-paper p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-xl font-semibold text-pine-deep">{title}</h3>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-ink/50 hover:bg-ink/5" aria-label="Close">✕</button>
+        </div>
+        <div className="mt-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+const inputCls =
+  "mt-1 w-full rounded-xl border border-pine/15 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-pine";
+const labelCls = "block text-sm font-medium text-ink/80";
+
+// -------------------------------------------------------------------- task form
+function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?: Task | null; onClose: () => void; onCreated: () => void }) {
+  const isEdit = !!editing;
+  const [title, setTitle] = useState(editing?.title ?? "");
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [dueAt, setDueAt] = useState(editing ? toLocalInput(editing.dueAt) : "");
+  const [requiresFile, setRequiresFile] = useState(editing?.requiresFile ?? false);
+  const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
+  const [tagInput, setTagInput] = useState("");
+  const [assignees, setAssignees] = useState<string[]>(editing ? [editing.assigneeEmail] : []);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const toggleAssignee = (email: string) =>
+    setAssignees((a) =>
+      isEdit ? [email] : a.includes(email) ? a.filter((x) => x !== email) : [...a, email]
+    );
+  const addTag = () => {
+    const t = tagInput.trim().replace(/^#/, "");
+    if (t && !tags.includes(t)) setTags([...tags, t]);
+    setTagInput("");
+  };
+
+  async function submit() {
+    setErr(null); setBusy(true);
+    try {
+      const dueIso = dueAt ? new Date(dueAt).toISOString() : "";
+      if (isEdit && editing) {
+        await api(`/api/lms/tasks/${editing.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            action: "edit", title, description, dueAt: dueIso,
+            requiresFile, tags, assigneeEmail: assignees[0] ?? editing.assigneeEmail,
+          }),
+        });
+      } else {
+        await api("/api/lms/tasks", {
+          method: "POST",
+          body: JSON.stringify({ title, description, dueAt: dueIso, requiresFile, tags, assigneeEmails: assignees }),
+        });
+      }
+      onCreated();
+    } catch (e) { setErr((e as Error).message); setBusy(false); }
+  }
+
+  return (
+    <Modal title={isEdit ? "Edit task" : "Assign a task"} onClose={onClose}>
+      <div className="space-y-4">
+        <div><label className={labelCls}>Title</label>
+          <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What needs doing?" /></div>
+        <div><label className={labelCls}>Description</label>
+          <textarea className={inputCls} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+        <div><label className={labelCls}>Due date &amp; time</label>
+          <input type="datetime-local" className={inputCls} value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></div>
+
+        <div>
+          <label className={labelCls}>Tags</label>
+          <div className="mt-1 flex gap-2">
+            <input className={inputCls} style={{ marginTop: 0 }} value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+              placeholder="Type a tag, press Enter" />
+            <button type="button" onClick={addTag} className="rounded-xl border border-pine/20 px-3 text-sm">Add</button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {tags.map((t) => (
+              <span key={t} className="inline-flex items-center gap-1 rounded-full bg-sage/15 px-2 py-0.5 text-xs text-pine-deep">
+                #{t}<button onClick={() => setTags(tags.filter((x) => x !== t))} className="text-ink/40">✕</button>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>Assign to{isEdit ? " (pick one)" : ""}</label>
+          <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-pine/15 p-2">
+            {meta.assignableMembers.map((m) => (
+              <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-pine/5">
+                <input type="checkbox" checked={assignees.includes(m.email)} onChange={() => toggleAssignee(m.email)} />
+                {m.name} <span className="text-xs text-ink/40">· {GROUP_LABEL[m.group]}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-ink/70">
+          <input type="checkbox" checked={requiresFile} onChange={(e) => setRequiresFile(e.target.checked)} />
+          Require a file upload <span className="text-xs text-ink/40">(upload coming soon — recorded for later)</span>
+        </label>
+
+        {err && <p className="text-sm text-red-600">{err}</p>}
+        <button onClick={submit} disabled={busy} className="btn-primary w-full justify-center disabled:opacity-60">
+          {busy ? "Saving…" : isEdit ? "Save changes" : "Assign task"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// ------------------------------------------------------------------- event form
+function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?: ClubEvent | null; onClose: () => void; onCreated: () => void }) {
+  const isEdit = !!editing;
+  const [title, setTitle] = useState(editing?.title ?? "");
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [startAt, setStartAt] = useState(editing ? toLocalInput(editing.startAt) : "");
+  const [scopeKind, setScopeKind] = useState<Meta["eventScopes"][number]>(editing?.scopeKind ?? meta.eventScopes[0]);
+  const [scopeEmails, setScopeEmails] = useState<string[]>(editing?.scopeEmails ?? []);
+  const [scopeGroups, setScopeGroups] = useState<Group[]>(editing?.scopeGroups ?? []);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setErr(null); setBusy(true);
+    try {
+      const startIso = startAt ? new Date(startAt).toISOString() : "";
+      const payload = { title, description, startAt: startIso, endAt: null, scopeKind, scopeEmails, scopeGroups };
+      if (isEdit && editing) {
+        await api(`/api/lms/events/${editing.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      } else {
+        await api("/api/lms/events", { method: "POST", body: JSON.stringify(payload) });
+      }
+      onCreated();
+    } catch (e) { setErr((e as Error).message); setBusy(false); }
+  }
+
+  return (
+    <Modal title={isEdit ? "Edit event" : "Create an event"} onClose={onClose}>
+      <div className="space-y-4">
+        <div><label className={labelCls}>Title</label>
+          <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+        <div><label className={labelCls}>Description</label>
+          <textarea className={inputCls} rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+        <div><label className={labelCls}>Start date &amp; time</label>
+          <input type="datetime-local" className={inputCls} value={startAt} onChange={(e) => setStartAt(e.target.value)} /></div>
+
+        <div>
+          <label className={labelCls}>Who is it for?</label>
+          <select className={inputCls} value={scopeKind} onChange={(e) => setScopeKind(e.target.value as Meta["eventScopes"][number])}>
+            {meta.eventScopes.map((s) => <option key={s} value={s}>{SCOPE_LABEL[s]}</option>)}
+          </select>
+        </div>
+
+        {scopeKind === "group" && (
+          <div>
+            <label className={labelCls}>Which group(s)?</label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {meta.targetableGroups.map((g) => (
+                <label key={g} className="flex items-center gap-1.5 rounded-full border border-pine/15 px-3 py-1 text-sm">
+                  <input type="checkbox" checked={scopeGroups.includes(g)}
+                    onChange={() => setScopeGroups((x) => x.includes(g) ? x.filter((y) => y !== g) : [...x, g])} />
+                  {GROUP_LABEL[g]}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {scopeKind === "members" && (
+          <div>
+            <label className={labelCls}>Which members?</label>
+            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-pine/15 p-2">
+              {meta.allMembers.map((m) => (
+                <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-pine/5">
+                  <input type="checkbox" checked={scopeEmails.includes(m.email)}
+                    onChange={() => setScopeEmails((x) => x.includes(m.email) ? x.filter((y) => y !== m.email) : [...x, m.email])} />
+                  {m.name} <span className="text-xs text-ink/40">· {GROUP_LABEL[m.group]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {err && <p className="text-sm text-red-600">{err}</p>}
+        <button onClick={submit} disabled={busy} className="btn-accent w-full justify-center disabled:opacity-60">
+          {busy ? "Saving…" : isEdit ? "Save changes" : "Create event"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
