@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
-import { MEMBERS } from "@/lib/members";
+import { MEMBERS, visibleMembers } from "@/lib/members";
 import {
   allowedAssignScopes,
   allowedEventScopes,
@@ -23,6 +23,7 @@ export async function GET() {
     name: `${m.firstName} ${m.lastName}`,
     group: m.group,
   });
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
   return NextResponse.json({
     me: { email: me.email, name: `${me.firstName} ${me.lastName}`, group: me.group, roles: me.roles },
@@ -30,12 +31,12 @@ export async function GET() {
       assignTasks: canAssignTasks(me),
       createEvents: canCreateEvents(me),
     },
-    assignableMembers: assignableMembers(me).map(lite),
+    assignableMembers: assignableMembers(me).map(lite).sort(byName),
     assignScopes: allowedAssignScopes(me),
     assignableGroups: assignableGroups(me),
     eventScopes: allowedEventScopes(me),
     targetableGroups: targetableGroups(me),
-    eventMemberTargets: targetableMembers(me).map(lite),
-    allMembers: MEMBERS.map(lite),
+    eventMemberTargets: targetableMembers(me).map(lite).sort(byName),
+    allMembers: visibleMembers(me.email).map(lite).sort(byName),
   });
 }

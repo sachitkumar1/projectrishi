@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
-import { findMember } from "@/lib/members";
+import { canSeeMember, findMember } from "@/lib/members";
 import { canAssignTasks, canAssignTaskTo, canManageTask } from "@/lib/lms/permissions";
 import { createTasks, listTasksForMember } from "@/lib/lms/store";
 import type { NewTaskInput } from "@/lib/lms/types";
@@ -35,10 +35,11 @@ export async function POST(req: Request) {
   if (assigneeEmails.length === 0)
     return NextResponse.json({ error: "Pick at least one person." }, { status: 400 });
 
-  // Enforce: every assignee must be someone this person is allowed to assign to.
+  // Enforce: every assignee must be someone this person is allowed to assign to
+  // (and allowed to see — hidden test accounts are off-limits to others).
   for (const email of assigneeEmails) {
     const target = findMember(email);
-    if (!target || !canAssignTaskTo(me, target)) {
+    if (!target || !canAssignTaskTo(me, target) || !canSeeMember(me.email, target)) {
       return NextResponse.json(
         { error: `You can't assign tasks to ${email}.` },
         { status: 403 }

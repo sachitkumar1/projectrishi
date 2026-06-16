@@ -7,7 +7,7 @@
 //  truth — the UI is just a convenience.
 // ============================================================================
 
-import { MEMBERS, findMember, type Member } from "@/lib/members";
+import { MEMBERS, canSeeMember, findMember, type Member } from "@/lib/members";
 import type { ClubEvent, EventScopeKind, ProjectGroup, Task } from "@/lib/lms/types";
 
 const eq = (a?: string | null, b?: string | null) =>
@@ -27,9 +27,9 @@ export function canAssignTaskTo(assigner: Member, assignee: Member): boolean {
   return false;
 }
 
-/** Every member this person is allowed to assign tasks to. */
+/** Every member this person is allowed to assign tasks to (hidden test accounts filtered out). */
 export function assignableMembers(assigner: Member): Member[] {
-  return MEMBERS.filter((m) => canAssignTaskTo(assigner, m));
+  return MEMBERS.filter((m) => canAssignTaskTo(assigner, m) && canSeeMember(assigner.email, m));
 }
 
 /** Audience shapes available when ASSIGNING tasks (parallels event scopes). */
@@ -108,15 +108,13 @@ export function targetableGroups(m: Member): ProjectGroup[] {
  * Roles stack (e.g. a Lead who is also an NMT leader gets both sets).
  */
 export function targetableMembers(m: Member): Member[] {
-  if (m.roles.internal || m.roles.vpp) return MEMBERS;
-  const picked = new Map<string, Member>();
-  if (m.roles.lead) {
-    MEMBERS.filter((x) => x.group === m.group).forEach((x) => picked.set(x.email, x));
-  }
-  if (m.roles.nmtLeader) {
-    MEMBERS.filter((x) => x.roles.newbie).forEach((x) => picked.set(x.email, x));
-  }
-  return Array.from(picked.values());
+  const list = m.roles.internal || m.roles.vpp ? MEMBERS : (() => {
+    const picked = new Map<string, Member>();
+    if (m.roles.lead) MEMBERS.filter((x) => x.group === m.group).forEach((x) => picked.set(x.email, x));
+    if (m.roles.nmtLeader) MEMBERS.filter((x) => x.roles.newbie).forEach((x) => picked.set(x.email, x));
+    return Array.from(picked.values());
+  })();
+  return list.filter((x) => canSeeMember(m.email, x));
 }
 
 /** Server-side check: may this member target exactly these emails with a "members" event? */

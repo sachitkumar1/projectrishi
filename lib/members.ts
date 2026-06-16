@@ -27,6 +27,8 @@ export type Member = {
   lastName: string;
   group: ProjectGroup;
   roles: RoleFlags;
+  /** Test accounts: only the owner + the account itself can see/select these. */
+  hidden?: boolean;
 };
 
 // Small helper so the list below stays short and readable.
@@ -57,10 +59,10 @@ export const MEMBERS: Member[] = [
   { email: "akotte@berkeley.edu", firstName: "Advik", lastName: "Kotte", group: "W", roles: roles({ nmtLeader: true }) },
   { email: "aryaprince@berkeley.edu", firstName: "Arya", lastName: "Prince", group: "E", roles: roles({}) },
   { email: "platy07@berkeley.edu", firstName: "Maia", lastName: "Berges", group: "R", roles: roles({ lead: true }) },
-  { email: "sachitkumar2025@gmail.com", firstName: "SachitLead", lastName: "Kumar", group: "W", roles: roles({ lead: true }) },
-  { email: "sachitkumar2020@gmail.com", firstName: "SachitInternal", lastName: "Kumar", group: "W", roles: roles({ internal: true }) },
-  { email: "kumarsachit2007@gmail.com", firstName: "SachitNMT", lastName: "Kumar", group: "W", roles: roles({ nmtLeader: true }) },
-  { email: "anonymousposter1029@gmail.com", firstName: "SachitNewbie", lastName: "Kumar", group: "W", roles: roles({ newbie: true }) },
+  { email: "sachitkumar2025@gmail.com", firstName: "SachitLead", lastName: "Kumar", group: "W", roles: roles({ lead: true }), hidden: true },
+  { email: "sachitkumar2020@gmail.com", firstName: "SachitInternal", lastName: "Kumar", group: "W", roles: roles({ internal: true }), hidden: true },
+  { email: "kumarsachit2007@gmail.com", firstName: "SachitNMT", lastName: "Kumar", group: "W", roles: roles({ nmtLeader: true }), hidden: true },
+  { email: "anonymousposter1029@gmail.com", firstName: "SachitNewbie", lastName: "Kumar", group: "W", roles: roles({ newbie: true }), hidden: true },
   { email: "ryancr@berkeley.edu", firstName: "Ryan", lastName: "Raphael", group: "E", roles: roles({ vpp: true, exec: true }) },
 ];
 
@@ -74,4 +76,20 @@ export function findMember(email?: string | null): Member | undefined {
 /** The full "First Last" name used to match a member to their lineage leaf. */
 export function memberFullName(m: Member): string {
   return `${m.firstName} ${m.lastName}`;
+}
+
+/**
+ * TEST-ACCOUNT VISIBILITY
+ * Members flagged `hidden` (the SachitLead / SachitNMT / etc. test accounts)
+ * are only visible to their owner and to the account itself. Everyone else
+ * never sees or can select them in task/event pickers.
+ */
+const TEST_ACCOUNT_OWNER = "sachitk@berkeley.edu";
+export function canSeeMember(viewerEmail: string | null | undefined, target: Member): boolean {
+  if (!target.hidden) return true;
+  const v = (viewerEmail ?? "").trim().toLowerCase();
+  return v === TEST_ACCOUNT_OWNER || v === target.email.toLowerCase();
+}
+export function visibleMembers(viewerEmail: string | null | undefined): Member[] {
+  return MEMBERS.filter((m) => canSeeMember(viewerEmail, m));
 }
