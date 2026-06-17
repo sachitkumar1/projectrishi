@@ -41,6 +41,7 @@ const eq = (a?: string | null, b?: string | null) =>
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const taskFromRow = (r: any): Task => ({
   id: r.id,
+  groupId: r.group_id ?? r.id,
   title: r.title,
   description: r.description ?? "",
   tags: r.tags ?? [],
@@ -50,6 +51,7 @@ const taskFromRow = (r: any): Task => ({
   assigneeEmail: r.assignee_email,
   status: r.status as TaskStatus,
   submittedAt: r.submitted_at ?? null,
+  archived: r.archived ?? false,
   createdAt: r.created_at,
 });
 
@@ -63,6 +65,7 @@ const eventFromRow = (r: any): ClubEvent => ({
   scopeKind: r.scope_kind,
   scopeEmails: r.scope_emails ?? [],
   scopeGroups: r.scope_groups ?? [],
+  archived: r.archived ?? false,
   createdAt: r.created_at,
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -90,6 +93,7 @@ function eventVisibleTo(e: ClubEvent, m: Member): boolean {
 const seedTasks: Task[] = [
   {
     id: "seed-t1",
+    groupId: "seed-t1",
     title: "Draft Fall recruitment flyer",
     description: "Design the flyer for our Fall info session and share a draft.",
     tags: ["recruitment", "design"],
@@ -99,10 +103,12 @@ const seedTasks: Task[] = [
     assigneeEmail: "palakprabhakar1@berkeley.edu",
     status: "not_complete",
     submittedAt: null,
+    archived: false,
     createdAt: now(),
   },
   {
     id: "seed-t2",
+    groupId: "seed-t2",
     title: "Confirm village contact for water testing",
     description: "Reach out to Naresh Ji and confirm the testing schedule.",
     tags: ["watsan", "logistics"],
@@ -112,10 +118,12 @@ const seedTasks: Task[] = [
     assigneeEmail: "palakprabhakar1@berkeley.edu",
     status: "pending",
     submittedAt: now(), // submitted late → timestamp will show red
+    archived: false,
     createdAt: now(),
   },
   {
     id: "seed-t3",
+    groupId: "seed-t3",
     title: "Prepare slides for GM",
     description: "Self-assigned: put together the general meeting deck.",
     tags: ["meeting"],
@@ -125,6 +133,38 @@ const seedTasks: Task[] = [
     assigneeEmail: "sachitk@berkeley.edu",
     status: "complete",
     submittedAt: now(),
+    archived: false,
+    createdAt: now(),
+  },
+  // A single task assigned to multiple people (shares one groupId).
+  {
+    id: "seed-t4a",
+    groupId: "seed-grp4",
+    title: "Submit availability for retreat",
+    description: "Fill out the when2meet for the spring retreat.",
+    tags: ["retreat"],
+    dueAt: new Date(Date.now() + 4 * 864e5).toISOString(),
+    requiresFile: false,
+    assignerEmail: "sachitk@berkeley.edu",
+    assigneeEmail: "palakprabhakar1@berkeley.edu",
+    status: "complete",
+    submittedAt: now(),
+    archived: false,
+    createdAt: now(),
+  },
+  {
+    id: "seed-t4b",
+    groupId: "seed-grp4",
+    title: "Submit availability for retreat",
+    description: "Fill out the when2meet for the spring retreat.",
+    tags: ["retreat"],
+    dueAt: new Date(Date.now() + 4 * 864e5).toISOString(),
+    requiresFile: false,
+    assignerEmail: "sachitk@berkeley.edu",
+    assigneeEmail: "nikita_jadhav@berkeley.edu",
+    status: "not_complete",
+    submittedAt: null,
+    archived: false,
     createdAt: now(),
   },
 ];
@@ -140,6 +180,7 @@ const seedEvents: ClubEvent[] = [
     scopeKind: "club",
     scopeEmails: [],
     scopeGroups: [],
+    archived: false,
     createdAt: now(),
   },
   {
@@ -152,6 +193,7 @@ const seedEvents: ClubEvent[] = [
     scopeKind: "group",
     scopeEmails: [],
     scopeGroups: ["W"],
+    archived: false,
     createdAt: now(),
   },
 ];
@@ -182,7 +224,9 @@ export async function createTasks(
   input: NewTaskInput,
   assignerEmail: string
 ): Promise<Task[]> {
+  const groupId = uid(); // one batch id shared by all assignees of this task
   const base = {
+    group_id: groupId,
     title: input.title,
     description: input.description,
     tags: input.tags,
@@ -194,8 +238,6 @@ export async function createTasks(
     const rows = input.assigneeEmails.map((assignee) => ({
       ...base,
       assignee_email: assignee,
-      // self-assigned tasks are immediately complete once created+submitted;
-      // here they start not_complete and the assignee can one-click complete.
       status: "not_complete",
     }));
     const { data, error } = await sb().from("lms_tasks").insert(rows).select("*");
@@ -204,6 +246,7 @@ export async function createTasks(
   }
   const created = input.assigneeEmails.map((assignee) => ({
     id: uid(),
+    groupId,
     title: input.title,
     description: input.description,
     tags: input.tags,
@@ -213,6 +256,7 @@ export async function createTasks(
     assigneeEmail: assignee,
     status: "not_complete" as TaskStatus,
     submittedAt: null,
+    archived: false,
     createdAt: now(),
   }));
   mem.tasks.push(...created);
@@ -314,6 +358,18 @@ export async function deleteTask(id: string): Promise<void> {
   mem.tasks = mem.tasks.filter((t) => t.id !== id);
 }
 
+export async function setTaskArchived(id: string, archived: boolean): Promise<Task> {
+  if (usingSupabase) {
+    const { data, error } = await sb().from("lms_tasks").update({ archived }).eq("id", id).select("*").single();
+    if (error) throw new Error(error.message);
+    return taskFromRow(data);
+  }
+  const t = mem.tasks.find((x) => x.id === id);
+  if (!t) throw new Error("Task not found");
+  t.archived = archived;
+  return t;
+}
+
 export async function listEventsForMember(member: Member): Promise<ClubEvent[]> {
   let all: ClubEvent[];
   if (usingSupabase) {
@@ -361,6 +417,7 @@ export async function createEvent(
     scopeKind: input.scopeKind,
     scopeEmails: input.scopeEmails,
     scopeGroups: input.scopeGroups,
+    archived: false,
     createdAt: now(),
   };
   mem.events.push(e);
@@ -417,4 +474,16 @@ export async function deleteEvent(id: string): Promise<void> {
     return;
   }
   mem.events = mem.events.filter((e) => e.id !== id);
+}
+
+export async function setEventArchived(id: string, archived: boolean): Promise<ClubEvent> {
+  if (usingSupabase) {
+    const { data, error } = await sb().from("lms_events").update({ archived }).eq("id", id).select("*").single();
+    if (error) throw new Error(error.message);
+    return eventFromRow(data);
+  }
+  const e = mem.events.find((x) => x.id === id);
+  if (!e) throw new Error("Event not found");
+  e.archived = archived;
+  return e;
 }

@@ -15,10 +15,12 @@ export async function POST() {
     return NextResponse.json({ error: "calendar_not_connected" }, { status: 403 });
 
   const allTasks = await listTasksForMember(me.email);
-  // Only tasks assigned TO me (self-assigned included) sync to the calendar —
-  // tasks I assigned to other people are not pushed to my Google Calendar.
-  const tasks = allTasks.filter((t) => t.assigneeEmail.toLowerCase() === me.email.toLowerCase());
-  const events = await listEventsForMember(me);
+  // Only non-archived tasks assigned TO me (self-assigned included) sync to the
+  // calendar — tasks I assigned to others, and archived tasks, are not pushed.
+  const tasks = allTasks.filter(
+    (t) => !t.archived && t.assigneeEmail.toLowerCase() === me.email.toLowerCase()
+  );
+  const events = (await listEventsForMember(me)).filter((e) => !e.archived);
 
   const items: SyncItem[] = [
     ...tasks.map((t) => {

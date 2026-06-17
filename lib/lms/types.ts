@@ -35,6 +35,7 @@ export type TaskStatus = "not_complete" | "pending" | "complete";
 
 export type Task = {
   id: string;
+  groupId: string; // shared by all copies created in one "assign to multiple people" action
   title: string;
   description: string;
   tags: string[];
@@ -44,6 +45,7 @@ export type Task = {
   assigneeEmail: string;
   status: TaskStatus;
   submittedAt: string | null; // when the assignee marked it done
+  archived: boolean;
   createdAt: string;
 };
 
@@ -69,6 +71,7 @@ export type ClubEvent = {
   scopeKind: EventScopeKind;
   scopeEmails: string[]; // when scopeKind === "members"
   scopeGroups: ProjectGroup[]; // when scopeKind === "group"
+  archived: boolean;
   createdAt: string;
 };
 

@@ -7,7 +7,7 @@ import {
   canManageTask,
   canSubmitTask,
 } from "@/lib/lms/permissions";
-import { approveTask, deleteTask, getTask, submitTask, updateTask } from "@/lib/lms/store";
+import { approveTask, deleteTask, getTask, setTaskArchived, submitTask, updateTask } from "@/lib/lms/store";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         { status: 403 }
       );
     return NextResponse.json({ task: await approveTask(task) });
+  }
+
+  if (body.action === "archive" || body.action === "unarchive") {
+    if (!canManageTask(me, task))
+      return NextResponse.json({ error: "You can't archive this task." }, { status: 403 });
+    return NextResponse.json({ task: await setTaskArchived(task.id, body.action === "archive") });
   }
 
   if (body.action === "edit") {

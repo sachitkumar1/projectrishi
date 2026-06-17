@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
 import { allowedEventScopes, canManageEvent, canTargetMembers, targetableGroups } from "@/lib/lms/permissions";
-import { deleteEvent, getEvent, updateEvent } from "@/lib/lms/store";
+import { deleteEvent, getEvent, setEventArchived, updateEvent } from "@/lib/lms/store";
 import type { ProjectGroup } from "@/lib/lms/types";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
   if (!canManageEvent(me, event))
     return NextResponse.json({ error: "You can't edit this event." }, { status: 403 });
+
+  if (body.action === "archive" || body.action === "unarchive") {
+    return NextResponse.json({ event: await setEventArchived(event.id, body.action === "archive") });
+  }
 
   const title = String(body.title ?? "").trim();
   const startAt = String(body.startAt ?? "");

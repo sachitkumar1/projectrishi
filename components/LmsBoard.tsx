@@ -27,16 +27,16 @@ type Meta = {
   allMembers: Lite[];
 };
 type Task = {
-  id: string; title: string; description: string; tags: string[];
+  id: string; groupId: string; title: string; description: string; tags: string[];
   dueAt: string; requiresFile: boolean; assignerEmail: string;
   assigneeEmail: string; status: "not_complete" | "pending" | "complete";
-  submittedAt: string | null; createdAt: string; canManage?: boolean;
+  submittedAt: string | null; archived: boolean; createdAt: string; canManage?: boolean;
 };
 type ClubEvent = {
   id: string; title: string; description: string; startAt: string;
   endAt: string | null; creatorEmail: string;
   scopeKind: "members" | "group" | "club" | "all_newbies";
-  scopeEmails: string[]; scopeGroups: Group[]; createdAt: string; canManage?: boolean;
+  scopeEmails: string[]; scopeGroups: Group[]; archived: boolean; createdAt: string; canManage?: boolean;
 };
 
 const SCOPE_LABEL: Record<Meta["eventScopes"][number], string> = {
@@ -45,6 +45,19 @@ const SCOPE_LABEL: Record<Meta["eventScopes"][number], string> = {
   club: "The whole club",
   all_newbies: "All newbies",
 };
+
+// Group task copies that were created together (same groupId) so a task
+// assigned to several people shows as one card.
+type TaskGroup = { key: string; rows: Task[]; head: Task };
+function groupByBatch(rows: Task[]): TaskGroup[] {
+  const m = new Map<string, Task[]>();
+  for (const t of rows) {
+    const k = t.groupId || t.id;
+    const arr = m.get(k);
+    if (arr) arr.push(t); else m.set(k, [t]);
+  }
+  return Array.from(m.entries()).map(([key, r]) => ({ key, rows: r, head: r[0] }));
+}
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -88,6 +101,7 @@ export default function LmsBoard() {
   const [editingEvent, setEditingEvent] = useState<ClubEvent | null>(null);
   const [showPastTasks, setShowPastTasks] = useState(false);
   const [showPastEvents, setShowPastEvents] = useState(false);
+  const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [calConnected, setCalConnected] = useState(false);
@@ -156,35 +170,70 @@ export default function LmsBoard() {
   }, [runSync]);
 
   const myEmail = meta?.me.email ?? "";
+  const nameOf = useCallback(
+    (email: string) => meta?.allMembers.find((m) => m.email.toLowerCase() === email.toLowerCase())?.name ?? email,
+    [meta]
+  );
+
   const assignedToMe = useMemo(
     () => tasks.filter((t) => t.assigneeEmail.toLowerCase() === myEmail.toLowerCase()),
     [tasks, myEmail]
   );
-  const assignedByMe = useMemo(
-    () => tasks.filter(
+  // Active = not complete and not archived.
+  const activeToMe = useMemo(
+    () => assignedToMe.filter((t) => t.status !== "complete" && !t.archived),
+    [assignedToMe]
+  );
+  // Tasks I assigned to OTHER people, grouped so a single task assigned to many
+  // people is one card. A group is active while any copy is still open.
+  const activeByMeGroups = useMemo(() => {
+    const rows = tasks.filter(
       (t) => t.assignerEmail.toLowerCase() === myEmail.toLowerCase()
         && t.assigneeEmail.toLowerCase() !== myEmail.toLowerCase()
-    ),
-    [tasks, myEmail]
-  );
-  // Completed tasks move to the "past" archive; active lists show the rest.
-  const activeToMe = useMemo(() => assignedToMe.filter((t) => t.status !== "complete"), [assignedToMe]);
-  const activeByMe = useMemo(() => assignedByMe.filter((t) => t.status !== "complete"), [assignedByMe]);
-  const pastTasks = useMemo(
-    () => tasks.filter((t) => t.status === "complete")
-      .sort((a, b) => (b.submittedAt ?? b.dueAt).localeCompare(a.submittedAt ?? a.dueAt)),
+    );
+    return groupByBatch(rows).filter((g) => g.rows.some((r) => r.status !== "complete" && !r.archived));
+  }, [tasks, myEmail]);
+  // Past tasks: any task I'm involved in where every copy is complete or archived.
+  const pastTaskGroups = useMemo(
+    () => groupByBatch(tasks)
+      .filter((g) => g.rows.every((r) => r.status === "complete" || r.archived))
+      .sort((a, b) => (b.head.submittedAt ?? b.head.dueAt).localeCompare(a.head.submittedAt ?? a.head.dueAt)),
     [tasks]
   );
+  const pastTaskCount = useMemo(() => pastTaskGroups.reduce((n, g) => n + g.rows.length, 0), [pastTaskGroups]);
+
   const { upcomingEvents, pastEvents } = useMemo(() => {
     const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-    const up = events.filter((e) => new Date(e.startAt) >= t0).sort((a, b) => a.startAt.localeCompare(b.startAt));
-    const pa = events.filter((e) => new Date(e.startAt) < t0).sort((a, b) => b.startAt.localeCompare(a.startAt));
+    const up = events.filter((e) => !e.archived && new Date(e.startAt) >= t0).sort((a, b) => a.startAt.localeCompare(b.startAt));
+    const pa = events.filter((e) => e.archived || new Date(e.startAt) < t0).sort((a, b) => b.startAt.localeCompare(a.startAt));
     return { upcomingEvents: up, pastEvents: pa };
   }, [events]);
 
-  async function act(taskId: string, action: "submit" | "approve") {
+  // Rows for the currently-open multi-assignee group (recomputed from fresh data).
+  const openGroupRows = useMemo(
+    () => (openGroupKey ? tasks.filter((t) => (t.groupId || t.id) === openGroupKey) : []),
+    [tasks, openGroupKey]
+  );
+
+  async function act(taskId: string, action: "submit" | "approve" | "archive" | "unarchive") {
     try {
       await api(`/api/lms/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ action }) });
+      await load();
+    } catch (err) { alert((err as Error).message); }
+  }
+
+  async function archiveGroup(rows: Task[], archived: boolean) {
+    try {
+      await Promise.all(rows.map((r) =>
+        api(`/api/lms/tasks/${r.id}`, { method: "PATCH", body: JSON.stringify({ action: archived ? "archive" : "unarchive" }) })
+      ));
+      await load();
+    } catch (err) { alert((err as Error).message); }
+  }
+
+  async function archiveEvent(eventId: string, archived: boolean) {
+    try {
+      await api(`/api/lms/events/${eventId}`, { method: "PATCH", body: JSON.stringify({ action: archived ? "archive" : "unarchive" }) });
       await load();
     } catch (err) { alert((err as Error).message); }
   }
@@ -271,7 +320,7 @@ export default function LmsBoard() {
       {/* archives + calendar sync */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <button onClick={() => setShowPastTasks(true)} className="btn-ghost text-sm">
-          Past tasks ({pastTasks.length})
+          Past tasks ({pastTaskCount})
         </button>
         <button onClick={() => setShowPastEvents(true)} className="btn-ghost text-sm">
           Past events ({pastEvents.length})
@@ -302,19 +351,26 @@ export default function LmsBoard() {
             {activeToMe.map((t) => (
               <TaskRow key={t.id} task={t} role="assignee"
                 onSubmit={() => act(t.id, "submit")}
-                onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)} />
+                onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)}
+                onArchive={() => act(t.id, "archive")} />
             ))}
           </div>
 
-          {activeByMe.length > 0 && (
+          {activeByMeGroups.length > 0 && (
             <>
               <h3 className="mt-8 font-display text-xl font-semibold text-pine-deep">Assigned by me</h3>
               <div className="mt-4 space-y-3">
-                {activeByMe.map((t) => (
-                  <TaskRow key={t.id} task={t} role="assigner"
-                    onApprove={() => act(t.id, "approve")}
-                    onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)} />
-                ))}
+                {activeByMeGroups.map((g) =>
+                  g.rows.length === 1 ? (
+                    <TaskRow key={g.key} task={g.rows[0]} role="assigner" assigneeName={nameOf(g.rows[0].assigneeEmail)}
+                      onApprove={() => act(g.rows[0].id, "approve")}
+                      onEdit={() => setEditingTask(g.rows[0])} onDelete={() => removeTask(g.rows[0].id)}
+                      onArchive={() => act(g.rows[0].id, "archive")} />
+                  ) : (
+                    <GroupCard key={g.key} group={g} onOpen={() => setOpenGroupKey(g.key)}
+                      onArchive={() => archiveGroup(g.rows, true)} />
+                  )
+                )}
               </div>
             </>
           )}
@@ -343,6 +399,7 @@ export default function LmsBoard() {
                   {e.canManage && (
                     <div className="flex gap-1">
                       <button onClick={() => setEditingEvent(e)} className="rounded-full px-2 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Edit</button>
+                      <button onClick={() => archiveEvent(e.id, true)} className="rounded-full px-2 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Archive</button>
                       <button onClick={() => removeEvent(e.id)} className="rounded-full px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
                     </div>
                   )}
@@ -364,28 +421,42 @@ export default function LmsBoard() {
 
       {showPastTasks && (
         <Modal title="Past tasks" onClose={() => setShowPastTasks(false)}>
-          {pastTasks.length === 0 ? (
-            <p className="text-sm text-ink/50">No completed tasks yet.</p>
+          {pastTaskGroups.length === 0 ? (
+            <p className="text-sm text-ink/50">No completed or archived tasks yet.</p>
           ) : (
             <div className="space-y-2">
-              {pastTasks.map((t) => {
-                const late = t.submittedAt && new Date(t.submittedAt) > new Date(t.dueAt);
-                const kind = taskKind(t, myEmail);
+              {pastTaskGroups.map((g) => {
+                const t = g.head;
+                const multi = g.rows.length > 1;
+                const doneCount = g.rows.filter((r) => r.status === "complete").length;
+                const anyArchived = g.rows.some((r) => r.archived);
+                const late = !multi && t.submittedAt && new Date(t.submittedAt) > new Date(t.dueAt);
                 return (
-                  <div key={t.id} className="rounded-xl border border-pine/12 p-3">
+                  <div key={g.key} className="rounded-xl border border-pine/12 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-ink">{t.title}</span>
                       <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                        style={{ backgroundColor: kind === "to" ? CAL_TO.bg : CAL_BY.bg, color: kind === "to" ? CAL_TO.fg : CAL_BY.fg }}>
-                        {kind === "to" ? "To me" : "By me"}
+                        style={{ backgroundColor: anyArchived ? "rgba(27,38,32,0.08)" : CAL_TO.bg, color: anyArchived ? "#1B2620" : CAL_TO.fg }}>
+                        {anyArchived ? "Archived" : "Complete"}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-ink/50">
-                      Due {fmtDateTime(t.dueAt)}
-                      {t.submittedAt && (
-                        <span className={late ? "font-semibold text-red-600" : ""}> · Completed {fmtDateTime(t.submittedAt)}{late ? " (late)" : ""}</span>
-                      )}
+                      {multi
+                        ? `Assigned to ${g.rows.length} people · ${doneCount} complete`
+                        : <>Due {fmtDateTime(t.dueAt)}{t.submittedAt && <span className={late ? "font-semibold text-red-600" : ""}> · Completed {fmtDateTime(t.submittedAt)}{late ? " (late)" : ""}</span>}</>}
                     </p>
+                    {g.rows.some((r) => r.canManage) && (
+                      <div className="mt-2 flex gap-2">
+                        {multi && (
+                          <button onClick={() => { setOpenGroupKey(g.key); setShowPastTasks(false); }}
+                            className="rounded-full border border-pine/20 px-3 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">View people</button>
+                        )}
+                        {anyArchived && (
+                          <button onClick={() => archiveGroup(g.rows.filter((r) => r.archived), false)}
+                            className="rounded-full border border-pine/20 px-3 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Unarchive</button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -403,13 +474,51 @@ export default function LmsBoard() {
                 <div key={e.id} className="rounded-xl border border-pine/12 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-ink">{e.title}</span>
-                    <span className="shrink-0 text-xs text-ink/50">{fmtDateTime(e.startAt)}</span>
+                    <span className="shrink-0 text-xs text-ink/50">
+                      {e.archived ? "Archived · " : ""}{fmtDateTime(e.startAt)}
+                    </span>
                   </div>
                   {e.description && <p className="mt-1 text-xs text-ink/60">{e.description}</p>}
+                  {e.canManage && e.archived && (
+                    <button onClick={() => archiveEvent(e.id, false)}
+                      className="mt-2 rounded-full border border-pine/20 px-3 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Unarchive</button>
+                  )}
                 </div>
               ))}
             </div>
           )}
+        </Modal>
+      )}
+
+      {openGroupKey && openGroupRows.length > 0 && (
+        <Modal title={openGroupRows[0].title} onClose={() => setOpenGroupKey(null)}>
+          <p className="text-sm text-ink/60">{openGroupRows[0].description || "Assigned to multiple people."}</p>
+          <p className="mt-1 text-xs text-ink/45">Due {fmtDateTime(openGroupRows[0].dueAt)}</p>
+          <div className="mt-4 space-y-2">
+            {openGroupRows.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl border border-pine/12 p-3">
+                <div>
+                  <p className="text-sm font-medium text-ink">{nameOf(r.assigneeEmail)}</p>
+                  <p className="text-xs text-ink/45">
+                    {r.status === "complete" ? "Complete" : r.status === "pending" ? "Pending review" : "Not yet complete"}
+                    {r.archived ? " · archived" : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  {r.status !== "complete" && (
+                    <button onClick={() => act(r.id, "approve")}
+                      className="rounded-full bg-marigold px-3 py-1 text-xs font-semibold text-pine-deep">Mark complete</button>
+                  )}
+                  <button onClick={() => removeTask(r.id)}
+                    className="rounded-full px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <button onClick={() => archiveGroup(openGroupRows, true)}
+              className="rounded-full border border-pine/20 px-4 py-2 text-xs font-medium text-pine-deep hover:bg-pine/5">Archive this task for everyone</button>
+          </div>
         </Modal>
       )}
     </div>
@@ -422,10 +531,10 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 // --------------------------------------------------------------------- task row
 function TaskRow({
-  task, role, onSubmit, onApprove, onEdit, onDelete,
+  task, role, assigneeName, onSubmit, onApprove, onEdit, onDelete, onArchive,
 }: {
-  task: Task; role: "assignee" | "assigner";
-  onSubmit?: () => void; onApprove?: () => void; onEdit?: () => void; onDelete?: () => void;
+  task: Task; role: "assignee" | "assigner"; assigneeName?: string;
+  onSubmit?: () => void; onApprove?: () => void; onEdit?: () => void; onDelete?: () => void; onArchive?: () => void;
 }) {
   const overdue = task.submittedAt
     ? new Date(task.submittedAt) > new Date(task.dueAt)
@@ -449,9 +558,10 @@ function TaskRow({
         <p className="font-semibold text-ink">{task.title}</p>
         <div className="flex shrink-0 items-center gap-1.5">
           {statusChip}
-          {task.canManage && (onEdit || onDelete) && (
+          {task.canManage && (onEdit || onDelete || onArchive) && (
             <span className="ml-1 flex gap-0.5">
               {onEdit && task.status !== "complete" && <button onClick={onEdit} title="Edit task" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-pine/5 hover:text-pine-deep">✎</button>}
+              {onArchive && <button onClick={onArchive} title="Archive task" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-pine/5 hover:text-pine-deep">🗄</button>}
               {onDelete && <button onClick={onDelete} title="Delete task" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-red-50 hover:text-red-600">🗑</button>}
             </span>
           )}
@@ -466,7 +576,9 @@ function TaskRow({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="text-ink/50">Due {fmtDateTime(task.dueAt)}</span>
+        <span className="text-ink/50">
+          Due {fmtDateTime(task.dueAt)}{role === "assigner" && assigneeName ? ` · ${assigneeName}` : ""}
+        </span>
         {task.submittedAt && (
           <span className={overdue ? "font-semibold text-red-600" : "text-ink/50"}>
             Submitted {fmtDateTime(task.submittedAt)}{overdue ? " (late)" : ""}
@@ -479,14 +591,39 @@ function TaskRow({
           Mark complete
         </button>
       )}
-      {role === "assigner" && task.status === "pending" && (
+      {role === "assigner" && task.status !== "complete" && (
         <button onClick={onApprove} className="mt-3 rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep transition-transform hover:scale-[1.02]">
-          Approve as complete
+          {task.status === "pending" ? "Approve as complete" : "Mark complete"}
         </button>
       )}
-      {role === "assigner" && task.status === "not_complete" && (
-        <p className="mt-3 text-xs text-ink/40">Waiting on {task.assigneeEmail}…</p>
-      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------- multi-assignee group card
+function GroupCard({ group, onOpen, onArchive }: { group: TaskGroup; onOpen: () => void; onArchive: () => void }) {
+  const t = group.head;
+  const done = group.rows.filter((r) => r.status === "complete").length;
+  const total = group.rows.length;
+  return (
+    <div className="rounded-2xl border border-pine/12 bg-paper p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-semibold text-ink">{t.title}</p>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="rounded-full bg-sage/15 px-2.5 py-1 text-xs font-semibold text-pine-deep">{done}/{total} complete</span>
+          {group.rows.some((r) => r.canManage) && (
+            <button onClick={onArchive} title="Archive for everyone" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-pine/5 hover:text-pine-deep">🗄</button>
+          )}
+        </div>
+      </div>
+      {t.description && <p className="mt-1 text-sm text-ink/70">{t.description}</p>}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {t.tags.map((tag) => <span key={tag} className="rounded-full bg-sage/15 px-2 py-0.5 text-[11px] font-medium text-pine-deep">#{tag}</span>)}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+        <span className="text-ink/50">Due {fmtDateTime(t.dueAt)} · {total} people</span>
+        <button onClick={onOpen} className="rounded-full border border-pine/20 px-3 py-1 font-medium text-pine-deep hover:bg-pine/5">View / manage</button>
+      </div>
     </div>
   );
 }
@@ -506,11 +643,12 @@ function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: Club
   while (cells.length % 7 !== 0) cells.push(null);
   const today = new Date();
 
-  // The calendar shows only tasks assigned TO me (self-assigned included) plus
-  // my events — tasks I assigned to other people are not shown here.
-  const myTasks = tasks.filter((t) => t.assigneeEmail.toLowerCase() === myEmail.toLowerCase());
+  // The calendar shows only non-archived tasks assigned TO me (self-assigned
+  // included) plus my non-archived events — tasks I assigned to others aren't shown.
+  const myTasks = tasks.filter((t) => !t.archived && t.assigneeEmail.toLowerCase() === myEmail.toLowerCase());
+  const liveEvents = events.filter((e) => !e.archived);
   const dayTasksFor = (date: Date) => myTasks.filter((t) => sameDay(new Date(t.dueAt), date));
-  const dayEventsFor = (date: Date) => events.filter((e) => sameDay(new Date(e.startAt), date));
+  const dayEventsFor = (date: Date) => liveEvents.filter((e) => sameDay(new Date(e.startAt), date));
 
   return (
     <div className="rounded-3xl border border-pine/12 bg-paper p-5">

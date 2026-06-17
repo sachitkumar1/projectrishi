@@ -8,6 +8,7 @@ create extension if not exists "pgcrypto";
 -- ---- Tasks -----------------------------------------------------------------
 create table if not exists lms_tasks (
   id             uuid primary key default gen_random_uuid(),
+  group_id       text,                                      -- shared by tasks assigned to multiple people at once
   title          text not null,
   description    text default '',
   tags           text[] default '{}',
@@ -17,6 +18,7 @@ create table if not exists lms_tasks (
   assignee_email text not null,
   status         text not null default 'not_complete', -- not_complete | pending | complete
   submitted_at   timestamptz,
+  archived       boolean not null default false,
   created_at     timestamptz not null default now()
 );
 
@@ -31,8 +33,15 @@ create table if not exists lms_events (
   scope_kind    text not null,           -- members | group | club | all_newbies
   scope_emails  text[] default '{}',
   scope_groups  text[] default '{}',
+  archived      boolean not null default false,
   created_at    timestamptz not null default now()
 );
+
+-- If you already created these tables earlier, run this migration once to add
+-- the new columns to your existing data:
+--   alter table lms_tasks  add column if not exists group_id text;
+--   alter table lms_tasks  add column if not exists archived boolean not null default false;
+--   alter table lms_events add column if not exists archived boolean not null default false;
 
 create index if not exists lms_tasks_assignee_idx on lms_tasks (assignee_email);
 create index if not exists lms_tasks_assigner_idx on lms_tasks (assigner_email);
