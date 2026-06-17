@@ -38,6 +38,17 @@ create index if not exists lms_tasks_assignee_idx on lms_tasks (assignee_email);
 create index if not exists lms_tasks_assigner_idx on lms_tasks (assigner_email);
 create index if not exists lms_events_start_idx   on lms_events (start_at);
 
+-- ---- Google Calendar connections -------------------------------------------
+-- One row per member who connected their Google Calendar. Holds the refresh
+-- token (server-only) and the set of items already pushed (for delete sync).
+create table if not exists lms_gcal (
+  user_email    text primary key,
+  refresh_token text not null,
+  sync_enabled  boolean not null default true,
+  synced_keys   text[] default '{}',
+  updated_at    timestamptz not null default now()
+);
+
 -- ---- Security --------------------------------------------------------------
 -- Turn ON row-level security with NO policies. This blocks the public "anon"
 -- key from touching these tables. The website talks to the database only from
@@ -45,6 +56,7 @@ create index if not exists lms_events_start_idx   on lms_events (start_at);
 -- working while the data stays private.
 alter table lms_tasks  enable row level security;
 alter table lms_events enable row level security;
+alter table lms_gcal   enable row level security;
 
 -- ---- Grants ----------------------------------------------------------------
 -- The website talks to the database only from the server, using the secret
@@ -54,3 +66,4 @@ alter table lms_events enable row level security;
 -- so the public key has no access to these tables at all.
 grant all privileges on table lms_tasks  to service_role;
 grant all privileges on table lms_events to service_role;
+grant all privileges on table lms_gcal   to service_role;

@@ -2,6 +2,12 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { findMember } from "@/lib/members";
 
+/**
+ * Login uses ONLY basic, non-sensitive scopes (email/profile), so members get
+ * a clean Google sign-in with no "unverified app" warning. Calendar access is
+ * requested separately and on-demand (see app/api/lms/gcal/*) only when a
+ * member chooses to connect their Google Calendar.
+ */
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -12,15 +18,12 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
-    error: "/login", // show "not allowed" message on the login page
+    error: "/login",
   },
   callbacks: {
-    // GATE: only allow sign-in if the Google email is in the members allowlist.
     async signIn({ user }) {
-  console.log("SIGN-IN ATTEMPT EMAIL:", user.email);
-  return Boolean(findMember(user.email));
-},
-    // Attach the member's first/last name (from our table) to the token.
+      return Boolean(findMember(user.email));
+    },
     async jwt({ token }) {
       const member = findMember(token.email);
       if (member) {
@@ -29,13 +32,10 @@ export const authOptions: NextAuthOptions = {
       }
       return token;
     },
-    // Expose first/last name on the session for use in the UI.
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { firstName?: string }).firstName =
-          (token.firstName as string) ?? null;
-        (session.user as { lastName?: string }).lastName =
-          (token.lastName as string) ?? null;
+        (session.user as { firstName?: string }).firstName = (token.firstName as string) ?? null;
+        (session.user as { lastName?: string }).lastName = (token.lastName as string) ?? null;
       }
       return session;
     },

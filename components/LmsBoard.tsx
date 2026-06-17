@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ----- types mirrored from the API JSON -----
 type Group = "E" | "R" | "W" | "H";
@@ -88,6 +88,30 @@ export default function LmsBoard() {
   const [editingEvent, setEditingEvent] = useState<ClubEvent | null>(null);
   const [showPastTasks, setShowPastTasks] = useState(false);
   const [showPastEvents, setShowPastEvents] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [calConnected, setCalConnected] = useState(false);
+  const calConnectedRef = useRef(false);
+  useEffect(() => { calConnectedRef.current = calConnected; }, [calConnected]);
+
+  // Silent push to Google Calendar (used by auto-sync and the manual path).
+  const runSync = useCallback(async (announce: boolean) => {
+    setSyncing(true);
+    if (announce) setSyncMsg(null);
+    try {
+      const r = await api("/api/lms/gcal/sync", { method: "POST" });
+      if (announce) setSyncMsg(`Synced ${r.total} item${r.total === 1 ? "" : "s"} to your Google Calendar.`);
+    } catch (err) {
+      const m = (err as Error).message;
+      if (m === "calendar_not_connected") { setCalConnected(false); }
+      else if (m === "calendar_permission") {
+        setCalConnected(false);
+        setSyncMsg("Google Calendar access expired. Click Connect to reconnect.");
+      } else if (announce) setSyncMsg("Sync failed — please try again in a moment.");
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -98,14 +122,38 @@ export default function LmsBoard() {
         api("/api/lms/events"),
       ]);
       setMeta(m); setTasks(t.tasks); setEvents(e.events); setError(null);
+      // If connected to Google Calendar, push the refreshed items right away so
+      // newly added/edited/removed tasks and events sync immediately.
+      if (calConnectedRef.current) runSync(false);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [runSync]);
 
   useEffect(() => { load(); }, [load]);
+
+  // On first render: learn whether the calendar is connected, handle the
+  // ?calendar= redirect result, and auto-sync if connected.
+  useEffect(() => {
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const flag = params.get("calendar");
+      if (flag) {
+        window.history.replaceState({}, "", window.location.pathname);
+        if (flag === "error") setSyncMsg("Google Calendar wasn't connected. Please try again.");
+      }
+      try {
+        const s = await api("/api/lms/gcal/status");
+        setCalConnected(s.connected);
+        if (s.connected || flag === "connected") {
+          setCalConnected(true);
+          await runSync(flag === "connected"); // announce right after connecting
+        }
+      } catch { /* not signed in / no status */ }
+    })();
+  }, [runSync]);
 
   const myEmail = meta?.me.email ?? "";
   const assignedToMe = useMemo(
@@ -157,6 +205,24 @@ export default function LmsBoard() {
     } catch (err) { alert((err as Error).message); }
   }
 
+  async function syncGoogleCalendar() {
+    await runSync(true);
+  }
+  function connectGoogleCalendar() {
+    window.location.href = "/api/lms/gcal/connect";
+  }
+  async function unsyncGoogleCalendar() {
+    if (!confirm("Stop syncing and remove the synced items from your Google Calendar?")) return;
+    setSyncing(true); setSyncMsg(null);
+    try {
+      await api("/api/lms/gcal/disconnect", { method: "POST" });
+      setCalConnected(false);
+      setSyncMsg("Disconnected. Your Google Calendar will no longer update.");
+    } catch {
+      setSyncMsg("Couldn't disconnect — please try again.");
+    } finally { setSyncing(false); }
+  }
+
   if (loading) return <p className="text-sm text-ink/50">Loading your dashboard…</p>;
   if (error)
     return (
@@ -202,15 +268,30 @@ export default function LmsBoard() {
         <CalendarMonth tasks={tasks} events={events} myEmail={myEmail} />
       </div>
 
-      {/* archives */}
-      <div className="mt-6 flex flex-wrap gap-2">
+      {/* archives + calendar sync */}
+      <div className="mt-6 flex flex-wrap items-center gap-2">
         <button onClick={() => setShowPastTasks(true)} className="btn-ghost text-sm">
           Past tasks ({pastTasks.length})
         </button>
         <button onClick={() => setShowPastEvents(true)} className="btn-ghost text-sm">
           Past events ({pastEvents.length})
         </button>
+        {calConnected ? (
+          <>
+            <button onClick={syncGoogleCalendar} disabled={syncing} className="btn-ghost text-sm disabled:opacity-60">
+              {syncing ? "Syncing…" : "Sync now"}
+            </button>
+            <button onClick={unsyncGoogleCalendar} disabled={syncing} className="btn-accent text-sm disabled:opacity-60">
+              Unsync from Google Calendar
+            </button>
+          </>
+        ) : (
+          <button onClick={connectGoogleCalendar} className="btn-accent text-sm">
+            Connect Google Calendar
+          </button>
+        )}
       </div>
+      {syncMsg && <p className="mt-2 text-sm text-ink/60">{syncMsg}</p>}
 
       {/* lists */}
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
@@ -425,7 +506,10 @@ function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: Club
   while (cells.length % 7 !== 0) cells.push(null);
   const today = new Date();
 
-  const dayTasksFor = (date: Date) => tasks.filter((t) => sameDay(new Date(t.dueAt), date));
+  // The calendar shows only tasks assigned TO me (self-assigned included) plus
+  // my events — tasks I assigned to other people are not shown here.
+  const myTasks = tasks.filter((t) => t.assigneeEmail.toLowerCase() === myEmail.toLowerCase());
+  const dayTasksFor = (date: Date) => myTasks.filter((t) => sameDay(new Date(t.dueAt), date));
   const dayEventsFor = (date: Date) => events.filter((e) => sameDay(new Date(e.startAt), date));
 
   return (
@@ -476,8 +560,7 @@ function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: Club
       </div>
       <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-ink/50">
         <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: CAL_EVENT.bg }} /> Event</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: CAL_TO.bg }} /> Task to me</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: CAL_BY.bg }} /> Task by me</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: CAL_TO.bg }} /> Task</span>
       </div>
 
       {openDay && (
