@@ -97,6 +97,9 @@ export default function Footer() {
         <div className="mt-14 flex flex-col items-start gap-4 border-t border-paper/15 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-paper/50">{ORG.copyright}</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <Link href="/privacy" className="text-xs text-paper/50 transition-colors hover:text-paper">
+              Privacy Policy
+            </Link>
             <span className="text-xs text-paper/50">
               Promoting sustainable development since 2008.
             </span>
