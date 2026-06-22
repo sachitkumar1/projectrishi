@@ -29,8 +29,8 @@ function LoginCard() {
 
       {error && (
         <p className="mt-5 rounded-xl border border-red-300/30 bg-red-500/15 px-4 py-3 text-sm text-red-100">
-          That account isn&rsquo;t on the member list. Please use the email your
-          chapter registered, or contact a lead.
+          That account isn&rsquo;t on the member list. If this is a mistake,
+          please inform your lead.
         </p>
       )}
 

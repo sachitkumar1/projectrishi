@@ -114,7 +114,6 @@ export default function LineagePage() {
             <p className="mt-3 max-w-2xl text-paper/75">
               The historic family trees of bigs and littles. Each head sits at
               the top, with their littles branching below.
-              {userName && " Your own lineage is shown first, with your name highlighted."}
             </p>
           </Reveal>
         </div>

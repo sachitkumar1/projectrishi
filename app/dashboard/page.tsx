@@ -24,10 +24,6 @@ export default function DashboardPage() {
             <h1 className="mt-4 font-display text-5xl font-semibold leading-[1.02] sm:text-6xl">
               Welcome, {firstName}
             </h1>
-            <p className="mt-5 max-w-xl text-paper/80">
-              Your space for everything Project RISHI. More tools are on the way —
-              for now, explore the chapter&rsquo;s lineage below.
-            </p>
             <button
               onClick={() => signOut({ callbackUrl: "/" })}
               className="mt-7 rounded-full border border-paper/30 px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-paper hover:text-pine-deep"
@@ -60,8 +56,7 @@ export default function DashboardPage() {
                   RISHI Lineage
                 </h2>
                 <p className="mt-2 max-w-sm text-sm opacity-80">
-                  View the historic family trees of bigs and littles — your own
-                  lineage shown first.
+                  View the historic family trees of bigs and littles.
                 </p>
               </div>
               <span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold">
