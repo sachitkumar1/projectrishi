@@ -1,0 +1,62 @@
+/* Styling for the rich-text editor's editable area (ProseMirror) and the
+   read-only rendered HTML it produces. Kept scoped under .rte-content. */
+
+.rte-content {
+  outline: none;
+  min-height: 12rem;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #1a1a1a;
+}
+.rte-content:focus {
+  outline: none;
+}
+.rte-content p {
+  margin: 0 0 0.65em;
+}
+.rte-content p:last-child {
+  margin-bottom: 0;
+}
+.rte-content h1 { font-size: 1.6em; font-weight: 700; margin: 0.6em 0 0.3em; }
+.rte-content h2 { font-size: 1.35em; font-weight: 700; margin: 0.6em 0 0.3em; }
+.rte-content h3 { font-size: 1.15em; font-weight: 700; margin: 0.6em 0 0.3em; }
+.rte-content ul,
+.rte-content ol {
+  padding-left: 1.5em;
+  margin: 0 0 0.65em;
+}
+.rte-content ul { list-style: disc; }
+.rte-content ol { list-style: decimal; }
+.rte-content li { margin: 0.15em 0; }
+.rte-content li > p { margin: 0; }
+.rte-content blockquote {
+  border-left: 3px solid #d8d2c4;
+  padding-left: 1em;
+  margin: 0 0 0.65em;
+  color: #555;
+}
+.rte-content a {
+  color: #1f5a44;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.rte-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.25em 0;
+}
+.rte-content code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+/* Placeholder (shown when empty) */
+.rte-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+}
