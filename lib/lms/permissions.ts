@@ -178,3 +178,42 @@ export function roleLabels(r: import("@/lib/lms/types").RoleFlags): string[] {
 export function isDirectorOfOutreach(m: Member): boolean {
   return m.roles.outreach;
 }
+
+// ============================================================================
+//  Announcements — permissions (Phase 3)
+// ----------------------------------------------------------------------------
+//  Exec: announce to specific members (anyone), any whole group, or the whole
+//        club. Leads: only members of their OWN project group.
+// ============================================================================
+
+export type AnnounceScopeKind = "members" | "group" | "club";
+
+export function canPostAnnouncements(m: Member): boolean {
+  return m.roles.exec || m.roles.lead;
+}
+
+export function announceScopes(m: Member): AnnounceScopeKind[] {
+  if (m.roles.exec) return ["members", "group", "club"];
+  if (m.roles.lead) return ["members", "group"];
+  return [];
+}
+
+/** Whole groups this member may address. Exec → all; Lead → own group only. */
+export function announceGroups(m: Member): ProjectGroup[] {
+  if (m.roles.exec) return ["E", "R", "W", "H"];
+  if (m.roles.lead) return [m.group];
+  return [];
+}
+
+/** Individual members this person may address. Exec → anyone; Lead → own group. */
+export function announceTargetableMembers(m: Member): Member[] {
+  const list = m.roles.exec ? MEMBERS : MEMBERS.filter((x) => x.group === m.group && m.roles.lead);
+  return list.filter((x) => canSeeMember(m.email, x));
+}
+
+/** Server-side guard: may this member address exactly these recipient emails? */
+export function canAnnounceToEmails(m: Member, emails: string[]): boolean {
+  if (!canPostAnnouncements(m)) return false;
+  const allowed = new Set(announceTargetableMembers(m).map((x) => x.email.toLowerCase()));
+  return emails.every((e) => allowed.has(e.trim().toLowerCase()));
+}

@@ -8,6 +8,7 @@ import Contours from "@/components/Contours";
 import LmsBoard from "@/components/LmsBoard";
 import Avatar from "@/components/Avatar";
 import SettingsGear from "@/components/SettingsGear";
+import AnnouncementsPanel from "@/components/AnnouncementsPanel";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -90,17 +91,9 @@ export default function DashboardPage() {
             </Link>
           </Reveal>
 
-          {/* Lineage's neighbor: quick intro to the board below */}
+          {/* Announcements card */}
           <Reveal delay={0.1}>
-            <div className="flex h-full flex-col justify-center rounded-3xl border border-pine/15 bg-marigold-soft/20 p-8">
-              <p className="font-display text-lg font-semibold text-pine-deep">
-                Your tasks &amp; calendar
-              </p>
-              <p className="mt-2 max-w-xs text-sm text-ink/60">
-                Everything assigned to you, plus events for your group and the
-                club, are gathered just below.
-              </p>
-            </div>
+            <AnnouncementsPanel />
           </Reveal>
         </div>
       </section>

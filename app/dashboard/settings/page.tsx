@@ -16,6 +16,14 @@ type Profile = {
   avatar: string | null;
 };
 
+type GmailStatus = {
+  personal: boolean;
+  personalEmail: string;
+  club: boolean;
+  canConnectClub: boolean;
+  sharedSender: string;
+};
+
 function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
     <label className="block">
@@ -32,6 +40,13 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [gmail, setGmail] = useState<GmailStatus | null>(null);
+
+  const loadGmail = () =>
+    fetch("/api/lms/gmail/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setGmail(d))
+      .catch(() => {});
 
   useEffect(() => {
     fetch("/api/lms/profile")
@@ -43,7 +58,13 @@ export default function SettingsPage() {
       .then(setProfile)
       .catch((e) => setError(e instanceof Error ? e.message : "Something went wrong."))
       .finally(() => setLoading(false));
+    loadGmail();
   }, []);
+
+  async function disconnectGmail(target: "personal" | "club") {
+    await fetch(`/api/lms/gmail/disconnect?target=${target}`, { method: "POST" });
+    loadGmail();
+  }
 
   return (
     <>
@@ -100,6 +121,53 @@ export default function SettingsPage() {
                 something looks wrong, let a lead know.
               </p>
             </div>
+
+            {/* Email sending (Gmail) */}
+            {gmail && (
+              <div className="mx-auto mt-6 max-w-xl rounded-3xl border border-pine/15 bg-pine/[0.03] p-8">
+                <h2 className="font-display text-lg font-semibold text-pine-deep">Email sending</h2>
+                <p className="mt-1 text-sm text-ink/60">
+                  Connect an account so the dashboard can send announcements and emails on your behalf.
+                  This uses send-only access &mdash; it can never read or delete your mail.
+                </p>
+
+                {/* Personal */}
+                <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-ink/10 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-ink">Your email</p>
+                    <p className="text-xs text-ink/50">{gmail.personalEmail}</p>
+                  </div>
+                  {gmail.personal ? (
+                    <button onClick={() => disconnectGmail("personal")} className="rounded-full border border-ink/15 px-4 py-2 text-xs font-semibold text-ink/70 hover:bg-ink/5">
+                      Disconnect
+                    </button>
+                  ) : (
+                    <a href="/api/lms/gmail/connect?target=personal" className="rounded-full bg-pine px-4 py-2 text-xs font-semibold text-paper hover:bg-pine-deep">
+                      Connect
+                    </a>
+                  )}
+                </div>
+
+                {/* Club (exec only) */}
+                {gmail.canConnectClub && (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-ink/10 p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">Club email</p>
+                      <p className="text-xs text-ink/50">{gmail.sharedSender}</p>
+                    </div>
+                    {gmail.club ? (
+                      <button onClick={() => disconnectGmail("club")} className="rounded-full border border-ink/15 px-4 py-2 text-xs font-semibold text-ink/70 hover:bg-ink/5">
+                        Disconnect
+                      </button>
+                    ) : (
+                      <a href="/api/lms/gmail/connect?target=club" className="rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep hover:brightness-95">
+                        Connect
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </Reveal>
         )}
       </section>

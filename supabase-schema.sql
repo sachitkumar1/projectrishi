@@ -77,16 +77,52 @@ grant all privileges on table lms_tasks  to service_role;
 grant all privileges on table lms_events to service_role;
 grant all privileges on table lms_gcal   to service_role;
 
--- ---- Member profiles (Phase 1: profile pictures) ---------------------------
--- One row per member who has customised their account. For now this only holds
--- an avatar, stored as a small cropped JPEG data URL (~20-50 KB after cropping).
--- Keyed by email so it lines up with the member allowlist. Members without a
--- row simply fall back to the default grey avatar in the UI.
-create table if not exists lms_profiles (
-  email      text primary key,
-  avatar     text,
-  updated_at timestamptz not null default now()
-);
+alter table lms_tasks  add column if not exists group_id text;
+alter table lms_tasks  add column if not exists archived boolean not null default false;
+alter table lms_events add column if not exists archived boolean not null default false;
 
+create table if not exists lms_profiles (
+  email text primary key, avatar text, updated_at timestamptz not null default now()
+);
 alter table lms_profiles enable row level security;
 grant all privileges on table lms_profiles to service_role;
+
+-- ---- Gmail send connections (Phase 3) --------------------------------------
+create table if not exists lms_gmail (
+  account_email          text primary key,
+  refresh_token          text not null,
+  connected_google_email text,
+  is_shared              boolean not null default false,
+  connected_by           text,
+  updated_at             timestamptz not null default now()
+);
+
+-- ---- Announcements (Phase 3) -----------------------------------------------
+create table if not exists lms_announcements (
+  id               text primary key,
+  author_email     text not null,
+  author_name      text not null,
+  sender_email     text not null,
+  subject          text not null,
+  body_html        text not null,
+  recipient_emails text[] not null default '{}',
+  created_at       timestamptz not null default now()
+);
+
+create table if not exists lms_announcement_reads (
+  announcement_id text not null,
+  user_email      text not null,
+  read            boolean not null default true,
+  updated_at      timestamptz not null default now(),
+  primary key (announcement_id, user_email)
+);
+
+create index if not exists lms_announcements_created_idx on lms_announcements (created_at desc);
+
+alter table lms_gmail               enable row level security;
+alter table lms_announcements       enable row level security;
+alter table lms_announcement_reads  enable row level security;
+
+grant all privileges on table lms_gmail               to service_role;
+grant all privileges on table lms_announcements       to service_role;
+grant all privileges on table lms_announcement_reads  to service_role;
