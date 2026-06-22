@@ -217,3 +217,39 @@ export function canAnnounceToEmails(m: Member, emails: string[]): boolean {
   const allowed = new Set(announceTargetableMembers(m).map((x) => x.email.toLowerCase()));
   return emails.every((e) => allowed.has(e.trim().toLowerCase()));
 }
+
+// ============================================================================
+//  Email & Newsletter — permissions (Phase 4)
+// ============================================================================
+
+/** Everyone can use the email tool. */
+export function canSendEmail(_m: Member): boolean {
+  return true;
+}
+
+/** Only the Director of Outreach can post Newsletters. */
+export function canPostNewsletter(m: Member): boolean {
+  return m.roles.outreach;
+}
+
+/** Which composer modes a member may open. */
+export function availableModes(m: Member): Array<"email" | "announcement" | "newsletter"> {
+  const modes: Array<"email" | "announcement" | "newsletter"> = ["email"];
+  if (canPostAnnouncements(m)) modes.push("announcement");
+  if (canPostNewsletter(m)) modes.push("newsletter");
+  return modes;
+}
+
+/**
+ * May this member send the EMAIL-mode message from the shared club account,
+ * given the recipients? Exec always may. A lead may only if every recipient is
+ * a member of the lead's own project group. Everyone else: personal only.
+ */
+export function canEmailFromClub(m: Member, recipientEmails: string[]): boolean {
+  if (m.roles.exec) return true;
+  if (!m.roles.lead) return false;
+  const groupEmails = new Set(
+    MEMBERS.filter((x) => x.group === m.group).map((x) => x.email.toLowerCase()),
+  );
+  return recipientEmails.every((e) => groupEmails.has(e.trim().toLowerCase()));
+}

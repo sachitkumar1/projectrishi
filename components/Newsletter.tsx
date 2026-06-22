@@ -1,23 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import { LINKS } from "@/lib/content";
 
 /**
  * Newsletter — email capture for the semesterly newsletter.
- * Until LINKS.newsletterAction is set, this just confirms locally.
- * To wire it up, point newsletterAction at a Google Form / Mailchimp /
- * your own API endpoint and submit `email` to it.
+ * Submits the email to the newsletter subscribe API.
  */
 export default function Newsletter() {
   const [email, setEmail] = useState("");
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    // TODO: send `email` to LINKS.newsletterAction here.
-    setDone(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/lms/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || "Couldn't sign you up. Please try again.");
+      }
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    }
   };
 
   return (
@@ -51,6 +62,7 @@ export default function Newsletter() {
           </button>
         </form>
       )}
+      {error && <p className="mt-2 text-sm text-marigold-soft">{error}</p>}
     </div>
   );
 }

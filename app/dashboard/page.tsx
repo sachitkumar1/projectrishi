@@ -9,6 +9,8 @@ import LmsBoard from "@/components/LmsBoard";
 import Avatar from "@/components/Avatar";
 import SettingsGear from "@/components/SettingsGear";
 import AnnouncementsPanel from "@/components/AnnouncementsPanel";
+import NewsletterPanel from "@/components/NewsletterPanel";
+import CreateMenu from "@/components/CreateMenu";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -59,7 +61,11 @@ export default function DashboardPage() {
 
       {/* Dashboard tiles */}
       <section className="container-rishi py-16">
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <h2 className="font-display text-2xl font-semibold text-pine-deep">Your dashboard</h2>
+          <CreateMenu />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Lineage card */}
           <Reveal>
             <Link
@@ -94,6 +100,11 @@ export default function DashboardPage() {
           {/* Announcements card */}
           <Reveal delay={0.1}>
             <AnnouncementsPanel />
+          </Reveal>
+
+          {/* Newsletters card */}
+          <Reveal delay={0.2}>
+            <NewsletterPanel />
           </Reveal>
         </div>
       </section>

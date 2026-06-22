@@ -61,12 +61,14 @@ export default function RichTextEditor({
   placeholder = "Write your message…",
   attachments,
   onAttachmentsChange,
+  registerInsert,
 }: {
   value?: string;
   onChange?: (html: string) => void;
   placeholder?: string;
   attachments?: File[];
   onAttachmentsChange?: (files: File[]) => void;
+  registerInsert?: (fn: (text: string) => void) => void;
 }) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +102,12 @@ export default function RichTextEditor({
     (next: File[]) => { setFiles(next); onAttachmentsChange?.(next); },
     [onAttachmentsChange],
   );
+
+  useEffect(() => {
+    if (editor && registerInsert) {
+      registerInsert((text: string) => editor.chain().focus().insertContent(text).run());
+    }
+  }, [editor, registerInsert]);
 
   if (!editor) {
     return <div className="rounded-xl border border-ink/15 p-4 text-sm text-ink/40">Loading editor…</div>;

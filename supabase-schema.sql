@@ -126,3 +126,25 @@ alter table lms_announcement_reads  enable row level security;
 grant all privileges on table lms_gmail               to service_role;
 grant all privileges on table lms_announcements       to service_role;
 grant all privileges on table lms_announcement_reads  to service_role;
+
+alter table lms_announcements add column if not exists mail_merge boolean not null default false;
+
+create table if not exists lms_newsletters (
+  id text primary key, author_email text not null, author_name text not null,
+  sender_email text not null, subject text not null, body_html text not null,
+  mail_merge boolean not null default true, created_at timestamptz not null default now()
+);
+create table if not exists lms_newsletter_reads (
+  newsletter_id text not null, user_email text not null, read boolean not null default true,
+  updated_at timestamptz not null default now(), primary key (newsletter_id, user_email)
+);
+create table if not exists lms_newsletter_subscribers (
+  email text primary key, created_at timestamptz not null default now()
+);
+create index if not exists lms_newsletters_created_idx on lms_newsletters (created_at desc);
+alter table lms_newsletters enable row level security;
+alter table lms_newsletter_reads enable row level security;
+alter table lms_newsletter_subscribers enable row level security;
+grant all privileges on table lms_newsletters to service_role;
+grant all privileges on table lms_newsletter_reads to service_role;
+grant all privileges on table lms_newsletter_subscribers to service_role;
