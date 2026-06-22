@@ -117,3 +117,26 @@ export async function setAnnouncementRead(id: string, email: string, read: boole
   }
   memReads.set(`${id}|${me}`, read);
 }
+
+/** Look up one announcement (to check authorship before deleting). */
+export async function getAnnouncementById(id: string): Promise<Announcement | null> {
+  if (usingSupabase) {
+    const { data, error } = await sb().from("lms_announcements").select("*").eq("id", id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? fromRow(data) : null;
+  }
+  return memAnn.find((a) => a.id === id) ?? null;
+}
+
+/** Delete an announcement and its read records. Does NOT affect sent emails. */
+export async function deleteAnnouncement(id: string): Promise<void> {
+  if (usingSupabase) {
+    const { error } = await sb().from("lms_announcements").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    await sb().from("lms_announcement_reads").delete().eq("announcement_id", id);
+    return;
+  }
+  const i = memAnn.findIndex((a) => a.id === id);
+  if (i >= 0) memAnn.splice(i, 1);
+  for (const key of Array.from(memReads.keys())) if (key.startsWith(`${id}|`)) memReads.delete(key);
+}

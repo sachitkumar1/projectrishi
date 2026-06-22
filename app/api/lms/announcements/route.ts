@@ -39,6 +39,7 @@ export async function GET() {
   const withAvatars = announcements.map((a) => ({
     ...a,
     authorAvatar: avatarMap[lc(a.authorEmail)] ?? null,
+    canDelete: lc(a.authorEmail) === lc(me.email),
   }));
 
   const [personal, club] = await Promise.all([
