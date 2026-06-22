@@ -487,3 +487,60 @@ export async function setEventArchived(id: string, archived: boolean): Promise<C
   e.archived = archived;
   return e;
 }
+
+// ============================================================================
+//  Member profiles (Phase 1: profile pictures)
+// ----------------------------------------------------------------------------
+//  Avatars are stored as small cropped JPEG data URLs. Same Supabase-or-memory
+//  pattern as tasks/events above.
+// ============================================================================
+
+const memProfiles = new Map<string, string>(); // email -> avatar data URL
+
+/** Get one member's avatar (or null if they haven't set one). */
+export async function getAvatar(email: string): Promise<string | null> {
+  const key = email.trim().toLowerCase();
+  if (usingSupabase) {
+    const { data, error } = await sb()
+      .from("lms_profiles")
+      .select("avatar")
+      .eq("email", key)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data?.avatar ?? null;
+  }
+  return memProfiles.get(key) ?? null;
+}
+
+/** Get avatars for many members at once → { email(lowercased): dataUrl }. */
+export async function getAvatars(emails: string[]): Promise<Record<string, string>> {
+  const keys = Array.from(new Set(emails.map((e) => e.trim().toLowerCase())));
+  if (keys.length === 0) return {};
+  if (usingSupabase) {
+    const { data, error } = await sb()
+      .from("lms_profiles")
+      .select("email, avatar")
+      .in("email", keys);
+    if (error) throw new Error(error.message);
+    const out: Record<string, string> = {};
+    for (const r of data ?? []) if (r.avatar) out[String(r.email).toLowerCase()] = r.avatar;
+    return out;
+  }
+  const out: Record<string, string> = {};
+  for (const k of keys) { const v = memProfiles.get(k); if (v) out[k] = v; }
+  return out;
+}
+
+/** Set (or clear, with null) the current member's avatar. */
+export async function setAvatar(email: string, avatar: string | null): Promise<void> {
+  const key = email.trim().toLowerCase();
+  if (usingSupabase) {
+    const { error } = await sb()
+      .from("lms_profiles")
+      .upsert({ email: key, avatar, updated_at: now() }, { onConflict: "email" });
+    if (error) throw new Error(error.message);
+    return;
+  }
+  if (avatar) memProfiles.set(key, avatar);
+  else memProfiles.delete(key);
+}

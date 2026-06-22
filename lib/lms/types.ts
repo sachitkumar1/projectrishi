@@ -20,6 +20,7 @@ export type RoleFlags = {
   internal: boolean;
   vpp: boolean; // VP / President
   exec: boolean;
+  outreach: boolean; // Director of Outreach (can post Newsletters)
 };
 
 export type MemberProfile = {

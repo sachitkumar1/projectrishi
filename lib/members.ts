@@ -12,7 +12,7 @@
  *  PROJECT GROUP codes:  E = Education,  R = Water & Sanitation,
  *                        W = Women's Empowerment,  H = Health
  *  ROLES (Y/N in the spreadsheet):  nmtLeader, newbie, lead, internal,
- *                        vpp (VP/President), exec
+ *                        vpp (VP/President), exec, outreach (Director of Outreach)
  *
  *  TO ADD A MEMBER: copy a line below, fill in their email, name, group, and
  *  roles. Capitalization of the email doesn't matter.
@@ -40,6 +40,7 @@ function roles(flags: Partial<RoleFlags>): RoleFlags {
     internal: false,
     vpp: false,
     exec: false,
+    outreach: false,
     ...flags,
   };
 }
@@ -52,7 +53,7 @@ export const MEMBERS: Member[] = [
   { email: "aarushimupparti@berkeley.edu", firstName: "Aarushi", lastName: "Mupparti", group: "H", roles: roles({ lead: true }) },
   { email: "arnavmishra@berkeley.edu", firstName: "Arnav", lastName: "Mishra", group: "R", roles: roles({}) },
   { email: "megha_ramachandran@berkeley.edu", firstName: "Megha", lastName: "Ramachandran", group: "E", roles: roles({ lead: true }) },
-  { email: "nikita_jadhav@berkeley.edu", firstName: "Nikita", lastName: "Jadhav", group: "W", roles: roles({ exec: true }) },
+  { email: "nikita_jadhav@berkeley.edu", firstName: "Nikita", lastName: "Jadhav", group: "W", roles: roles({ exec: true, outreach: true }) },
   { email: "autkarsh@berkeley.edu", firstName: "Utkarsh", lastName: "Aggarwal", group: "E", roles: roles({ lead: true }) },
   { email: "tanyagoel101@berkeley.edu", firstName: "Tanya", lastName: "Goel", group: "H", roles: roles({ vpp: true, exec: true }) },
   { email: "grishma_jain@berkeley.edu", firstName: "Grishma", lastName: "Jain", group: "E", roles: roles({ vpp: true, exec: true }) },

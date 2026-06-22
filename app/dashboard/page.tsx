@@ -1,14 +1,30 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Reveal from "@/components/Reveal";
 import Contours from "@/components/Contours";
 import LmsBoard from "@/components/LmsBoard";
+import Avatar from "@/components/Avatar";
+import SettingsGear from "@/components/SettingsGear";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
   const firstName = session?.user?.firstName || "Member";
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [fullName, setFullName] = useState<string>("");
+
+  useEffect(() => {
+    fetch("/api/lms/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setAvatar(d.avatar ?? null);
+        setFullName(`${d.firstName} ${d.lastName}`);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <>
@@ -17,13 +33,19 @@ export default function DashboardPage() {
         <Contours className="absolute inset-0 h-full w-full text-paper" opacity={0.12} />
         <div className="container-rishi relative z-10 py-16 lg:py-20">
           <Reveal>
-            <span className="eyebrow text-marigold-soft">
-              <span className="h-1.5 w-1.5 rounded-full bg-marigold" />
-              Member Dashboard
-            </span>
-            <h1 className="mt-4 font-display text-5xl font-semibold leading-[1.02] sm:text-6xl">
-              Welcome, {firstName}
-            </h1>
+            <div className="flex items-start justify-between gap-4">
+              <span className="eyebrow text-marigold-soft">
+                <span className="h-1.5 w-1.5 rounded-full bg-marigold" />
+                Member Dashboard
+              </span>
+              <SettingsGear />
+            </div>
+            <div className="mt-5 flex items-center gap-5">
+              <Avatar src={avatar} name={fullName || firstName} size={72} className="ring-2 ring-paper/30" />
+              <h1 className="font-display text-5xl font-semibold leading-[1.02] sm:text-6xl">
+                Welcome, {firstName}
+              </h1>
+            </div>
             <button
               onClick={() => signOut({ callbackUrl: "/" })}
               className="mt-7 rounded-full border border-paper/30 px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-paper hover:text-pine-deep"

@@ -76,3 +76,17 @@ alter table lms_gcal   enable row level security;
 grant all privileges on table lms_tasks  to service_role;
 grant all privileges on table lms_events to service_role;
 grant all privileges on table lms_gcal   to service_role;
+
+-- ---- Member profiles (Phase 1: profile pictures) ---------------------------
+-- One row per member who has customised their account. For now this only holds
+-- an avatar, stored as a small cropped JPEG data URL (~20-50 KB after cropping).
+-- Keyed by email so it lines up with the member allowlist. Members without a
+-- row simply fall back to the default grey avatar in the UI.
+create table if not exists lms_profiles (
+  email      text primary key,
+  avatar     text,
+  updated_at timestamptz not null default now()
+);
+
+alter table lms_profiles enable row level security;
+grant all privileges on table lms_profiles to service_role;

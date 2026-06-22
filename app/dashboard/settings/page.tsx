@@ -1,0 +1,119 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import Reveal from "@/components/Reveal";
+import Contours from "@/components/Contours";
+import Avatar from "@/components/Avatar";
+import ProfilePhotoModal from "@/components/ProfilePhotoModal";
+
+type Profile = {
+  email: string;
+  firstName: string;
+  lastName: string;
+  groupLabel: string;
+  roleLabels: string[];
+  avatar: string | null;
+};
+
+function ReadonlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">{label}</span>
+      <div className="mt-1.5 cursor-not-allowed select-none rounded-xl border border-ink/10 bg-ink/[0.04] px-4 py-3 text-sm text-ink/60">
+        {value || "—"}
+      </div>
+    </label>
+  );
+}
+
+export default function SettingsPage() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/lms/profile")
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d?.error || "Couldn't load your settings.");
+        return d as Profile;
+      })
+      .then(setProfile)
+      .catch((e) => setError(e instanceof Error ? e.message : "Something went wrong."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <>
+      <section className="relative overflow-hidden bg-pine pt-[var(--header-h)] text-paper">
+        <Contours className="absolute inset-0 h-full w-full text-paper" opacity={0.12} />
+        <div className="container-rishi relative z-10 py-12">
+          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-paper/80 hover:text-paper">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M11 6l-6 6 6 6" />
+            </svg>
+            Back to dashboard
+          </Link>
+          <h1 className="mt-4 font-display text-4xl font-semibold sm:text-5xl">Account settings</h1>
+        </div>
+      </section>
+
+      <section className="container-rishi py-12">
+        {loading && <p className="text-ink/60">Loading…</p>}
+        {error && <p className="text-red-600">{error}</p>}
+
+        {profile && (
+          <Reveal>
+            <div className="mx-auto max-w-xl rounded-3xl border border-pine/15 bg-pine/[0.03] p-8">
+              {/* Photo (the one editable setting for now) */}
+              <div className="flex items-center gap-5">
+                <Avatar src={profile.avatar} name={`${profile.firstName} ${profile.lastName}`} size={88} />
+                <div>
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="rounded-full bg-pine px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-pine-deep"
+                  >
+                    Change photo
+                  </button>
+                  <p className="mt-2 text-xs text-ink/50">JPG or PNG. You can crop and zoom after choosing.</p>
+                </div>
+              </div>
+
+              {/* Read-only account details */}
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                <ReadonlyField label="First name" value={profile.firstName} />
+                <ReadonlyField label="Last name" value={profile.lastName} />
+                <div className="sm:col-span-2">
+                  <ReadonlyField label="Email" value={profile.email} />
+                </div>
+                <div className="sm:col-span-2">
+                  <ReadonlyField label="Project group" value={profile.groupLabel} />
+                </div>
+                <div className="sm:col-span-2">
+                  <ReadonlyField label="Role(s)" value={profile.roleLabels.join(", ")} />
+                </div>
+              </div>
+              <p className="mt-5 text-xs text-ink/45">
+                Name, email, and roles are managed by the club and can&rsquo;t be edited here. If
+                something looks wrong, let a lead know.
+              </p>
+            </div>
+          </Reveal>
+        )}
+      </section>
+
+      {showModal && profile && (
+        <ProfilePhotoModal
+          currentAvatar={profile.avatar}
+          onClose={() => setShowModal(false)}
+          onSaved={(avatar) => {
+            setProfile((p) => (p ? { ...p, avatar } : p));
+            setShowModal(false);
+          }}
+        />
+      )}
+    </>
+  );
+}

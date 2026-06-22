@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Avatar from "@/components/Avatar";
 
 // ----- types mirrored from the API JSON -----
 type Group = "E" | "R" | "W" | "H";
@@ -14,7 +15,7 @@ type Roles = {
   nmtLeader: boolean; newbie: boolean; lead: boolean;
   internal: boolean; vpp: boolean; exec: boolean;
 };
-type Lite = { email: string; name: string; group: Group };
+type Lite = { email: string; name: string; group: Group; avatar?: string | null };
 type Meta = {
   me: { email: string; name: string; group: Group; roles: Roles };
   can: { assignTasks: boolean; createEvents: boolean };
@@ -172,6 +173,10 @@ export default function LmsBoard() {
   const myEmail = meta?.me.email ?? "";
   const nameOf = useCallback(
     (email: string) => meta?.allMembers.find((m) => m.email.toLowerCase() === email.toLowerCase())?.name ?? email,
+    [meta]
+  );
+  const avatarOf = useCallback(
+    (email: string) => meta?.allMembers.find((m) => m.email.toLowerCase() === email.toLowerCase())?.avatar ?? null,
     [meta]
   );
 
@@ -362,7 +367,7 @@ export default function LmsBoard() {
               <div className="mt-4 space-y-3">
                 {activeByMeGroups.map((g) =>
                   g.rows.length === 1 ? (
-                    <TaskRow key={g.key} task={g.rows[0]} role="assigner" assigneeName={nameOf(g.rows[0].assigneeEmail)}
+                    <TaskRow key={g.key} task={g.rows[0]} role="assigner" assigneeName={nameOf(g.rows[0].assigneeEmail)} assigneeAvatar={avatarOf(g.rows[0].assigneeEmail)}
                       onApprove={() => act(g.rows[0].id, "approve")}
                       onEdit={() => setEditingTask(g.rows[0])} onDelete={() => removeTask(g.rows[0].id)}
                       onArchive={() => act(g.rows[0].id, "archive")} />
@@ -497,12 +502,15 @@ export default function LmsBoard() {
           <div className="mt-4 space-y-2">
             {openGroupRows.map((r) => (
               <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl border border-pine/12 p-3">
-                <div>
-                  <p className="text-sm font-medium text-ink">{nameOf(r.assigneeEmail)}</p>
-                  <p className="text-xs text-ink/45">
-                    {r.status === "complete" ? "Complete" : r.status === "pending" ? "Pending review" : "Not yet complete"}
-                    {r.archived ? " · archived" : ""}
-                  </p>
+                <div className="flex items-center gap-2.5">
+                  <Avatar src={avatarOf(r.assigneeEmail)} name={nameOf(r.assigneeEmail)} size={28} />
+                  <div>
+                    <p className="text-sm font-medium text-ink">{nameOf(r.assigneeEmail)}</p>
+                    <p className="text-xs text-ink/45">
+                      {r.status === "complete" ? "Complete" : r.status === "pending" ? "Pending review" : "Not yet complete"}
+                      {r.archived ? " · archived" : ""}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
                   {r.status !== "complete" && (
@@ -531,9 +539,9 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 // --------------------------------------------------------------------- task row
 function TaskRow({
-  task, role, assigneeName, onSubmit, onApprove, onEdit, onDelete, onArchive,
+  task, role, assigneeName, assigneeAvatar, onSubmit, onApprove, onEdit, onDelete, onArchive,
 }: {
-  task: Task; role: "assignee" | "assigner"; assigneeName?: string;
+  task: Task; role: "assignee" | "assigner"; assigneeName?: string; assigneeAvatar?: string | null;
   onSubmit?: () => void; onApprove?: () => void; onEdit?: () => void; onDelete?: () => void; onArchive?: () => void;
 }) {
   const overdue = task.submittedAt
@@ -576,8 +584,15 @@ function TaskRow({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="text-ink/50">
-          Due {fmtDateTime(task.dueAt)}{role === "assigner" && assigneeName ? ` · ${assigneeName}` : ""}
+        <span className="flex items-center gap-1.5 text-ink/50">
+          Due {fmtDateTime(task.dueAt)}
+          {role === "assigner" && assigneeName ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span>·</span>
+              <Avatar src={assigneeAvatar} name={assigneeName} size={18} />
+              {assigneeName}
+            </span>
+          ) : ""}
         </span>
         {task.submittedAt && (
           <span className={overdue ? "font-semibold text-red-600" : "text-ink/50"}>

@@ -159,3 +159,22 @@ export function canManageEvent(actor: Member, event: ClubEvent): boolean {
   }
   return false;
 }
+
+// ----------------------------------------------------------- role display
+/** Human-readable labels for a member's roles, for display on their profile. */
+export function roleLabels(r: import("@/lib/lms/types").RoleFlags): string[] {
+  const out: string[] = [];
+  if (r.vpp) out.push("VP / President");
+  if (r.exec) out.push("Exec");
+  if (r.outreach) out.push("Director of Outreach");
+  if (r.lead) out.push("Project Lead");
+  if (r.internal) out.push("Internal");
+  if (r.nmtLeader) out.push("New Member Training Leader");
+  if (r.newbie) out.push("New Member");
+  return out.length ? out : ["Member"];
+}
+
+/** Director of Outreach — the only role that can post Newsletters (Phase 5). */
+export function isDirectorOfOutreach(m: Member): boolean {
+  return m.roles.outreach;
+}
