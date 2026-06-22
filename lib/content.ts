@@ -90,35 +90,40 @@ export const PROJECTS = [
     quote: "Education is not preparation for life; education is life itself.",
     quoteAuthor: "John Dewey",
     intro:
-      "Education is dedicated to improving the learning environment and future opportunities for students in Bharog Baneri. We work with schools and community members to improve infrastructure, expand access to technology, promote extracurricular growth, and provide mentorship that supports students beyond secondary school. Our goal is to make sure every student has the resources and support they need to learn, grow, and pursue their aspirations.",
+      "Education is dedicated to improving the learning environment and future opportunities for students in Bharog Baneri. We work with schools and community members to expand access to technology, promote extracurricular growth, and provide mentorship that supports students during and beyond secondary school. Our goal is to make sure every student has the resources and support they need to learn, grow, and pursue their aspirations.",
     highlights: [
       {
-        title: "Career Panels",
-        body: "Between 2022 and 2025 we held a series of career panels at the secondary school, hosting speakers from IIM Sirmaur and the Central University of Himachal Pradesh, giving students the chance to learn about higher-education opportunities and career options.",
-        image: null,
+        title: "Career Panel",
+        body: "Hosts an annual career panel for students in grades 11–12 at Bharog Baneri's Secondary School, inviting speakers from IIM Sirmaur and Central University of Himachal Pradesh who talk to students about paths to higher education, how to choose a suitable career path, and how they selected their careers. This provides students with the opportunity to learn about future careers in an interactive, small-group setting.",
+        image: "/images/projects/education-career-panel.jpg",
       },
       {
-        title: "Infrastructural Improvements",
-        body: "Improved the secondary school by bringing in 40 desks, adding bathrooms, and installing a water filter — giving students a cleaner, more supportive learning environment.",
-        image: null,
+        title: "Teacher Interviews",
+        body: "During the annual India Trip, meets with teachers at the secondary school and local primary schools to identify gaps in education and learn more about the hurdles students face in attending school. Learned how issues such as infrastructural problems, teacher absenteeism, and a lack of opportunity within STEM subjects affect student learning.",
+        image: "/images/projects/education-teacher-interviews.jpg",
+      },
+      {
+        title: "IIM Sirmaur / JAL Partnership",
+        body: "Established connections with professors and JAL, a community-service student group at IIM Sirmaur, a nearby university in Paonta Sahib. During the 2026 India Trip, conducted a focus-group session with multiple professors at IIM Sirmaur to receive feedback on past and current projects and identify sustainable opportunities for further work. We are working to develop this into a more formal partnership to bring some of JAL's projects to Bharog Baneri.",
+        image: "/images/projects/education-iim-jal.jpg",
       },
     ],
     past: [
       {
-        title: "Career Counseling Session",
-        body: "Hosted a career counselling session with Dr. Geeta, who discussed the different streams available for students in Bharog.",
+        title: "STEMRobo Robotics Workshop",
+        body: "In September 2025, partnered with the organization STEMRobo to conduct a robotics workshop at the secondary school, including the donation of multiple robotics kits that gave students a hands-on way to learn more about technology and hardware.",
       },
       {
-        title: "Distribution of Learning Material",
-        body: "Distributed Teacher Learning Materials to the primary schools to aid teachers in day-to-day classroom activities.",
+        title: "Kabbadi Mats",
+        body: "Students and teachers expressed interest in developing the children's sportsmanship, as many already play sports competitively at a high level and have the opportunity to receive scholarships. Education oversaw the donation of kabbadi mats to the secondary school, allowing students to practice more easily while at school.",
       },
       {
-        title: "Focus Groups & Student Shadowing",
-        body: "Conducted focus-group interviews with students, distributed household surveys, and toured the school to gather insights that inform future projects.",
+        title: "Textbook Donation",
+        body: "As part of a larger ongoing library project, RISHI oversaw the donation of multiple General Knowledge, English, and exam-preparation textbooks that align with and support the existing curriculum at the school. The textbooks are still widely used by teachers.",
       },
       {
-        title: "Build Desks & Fix Bathrooms",
-        body: "Built and funded over 25 desks for the school's students and renovated bathroom infrastructure to improve hygiene.",
+        title: "Infrastructural Support",
+        body: "Over the years, Education has supported various infrastructural projects within the school, such as constructing an entrance gate, repairing old desks, facilitating the purchase of water filters, and securing supplemental technology for the computer lab.",
       },
     ],
   },
@@ -177,35 +182,40 @@ export const PROJECTS = [
     quote: "Women are the future of society.",
     quoteAuthor: "",
     intro:
-      "Our Women's Empowerment team is committed to creating lasting impact by uplifting and supporting women across rural India. Through menstrual-health education, skill-building workshops, and economic-opportunity initiatives, we work to empower women with the tools and resources they need to flourish. From reusable-pad distribution events to partnerships with local entrepreneurs, our mission is simple: to amplify voices, foster independence, and build stronger communities together.",
+      "The Women's Empowerment team is focused on improving financial independence and reproductive-health awareness for women and schoolgirls in Bharog Baneri through sustainable, community-driven initiatives. We create opportunities for women to grow small businesses by hosting skill-building workshops, supporting local product creation, and building on existing agricultural practices — such as dairy farming and garlic harvesting — to increase long-term income potential. Through menstrual-health education and reusable-pad distribution events, we work to improve accessibility and comfort for schoolgirls and women. Our mission is to empower female voices, foster long-term independence, and build stronger communities together.",
     highlights: [
       {
-        title: "Reusable Pad Distributions",
-        body: "Hosted reusable-pad distribution events at a local school and partnered with existing community groups — combining access to sustainable menstrual products with women's-health education. Together we are breaking stigma, fostering confidence, and creating lasting impact for women and girls across rural India.",
-        image: null,
+        title: "Teen Health Awareness Workshops",
+        body: "Hosted workshops for students in grades 9–12 focused on how puberty and hormones influence mental health, physical health, relationships, and everyday teenage life. Conducted separate sessions for schoolgirls and schoolboys, addressing gaps in the secondary school's existing curriculum by introducing boys to menstrual cycles and helping girls explore the effects of social media on healthy relationships and self-confidence.",
+        image: "/images/projects/womens-teen-health.jpg",
       },
       {
-        title: "Small Business Support",
-        body: "We are exploring small-business opportunities that uplift women and strengthen communities — from dairy-farming initiatives to basket-weaving collectives — creating sustainable pathways to independence, skills, and family support.",
-        image: null,
+        title: "Focus Group Interviews",
+        body: "Met with women's groups from all 5 ward-level Mahila Mandals and several Self-Help Groups to understand female participation in banking, income generation, and entrepreneurship. Identified sustainable economic opportunities to design relevant workshops in sewing, beauty services, pickle production, and disposable-plate making, allowing women to easily pursue diverse income-generating activities.",
+        image: "/images/projects/womens-focus-group.jpg",
+      },
+      {
+        title: "Government Program Awareness",
+        body: "Established a formal relationship with the local BDO and government Forest Division to connect women with programs including microloans, entrepreneurship support, and skill-development initiatives. Drawing on frameworks already adopted by neighboring areas to expand access to resources that have successfully supported financial independence and skill growth in rural areas.",
+        image: "/images/projects/womens-govt-awareness.jpg",
       },
     ],
     past: [
       {
-        title: "Menstrual & Telehealth Workshop",
-        body: "Partnered with PINKISHE to train teachers as Certified Menstrual Health Educators, organized a career panel at a secondary school, and partnered with Tele-Upchaar to host a telehealth event.",
+        title: "Reusable Pad Distribution",
+        body: "Partnered with PINKISHE to host an access and education initiative that distributed 1,000+ reusable pads and brought a female gynecologist who taught menstrual hygiene to 200+ women and schoolgirls.",
       },
       {
-        title: "Gynecologist Telehealth Program",
-        body: "Piloted a telehealth program at the Public Health Center with TeleUpchaar, providing remote gynecological consultations for women in the village in coordination with the local doctor and a health worker.",
-      },
-      {
-        title: "Health & Hygiene Workshop",
-        body: "Partnered with PINKISHE to distribute 1,000 reusable pads and brought in a female gynecologist who presented to 200 women and girls about menstrual health and hygiene.",
+        title: "Women's x Health",
+        body: "Donated a fetal doppler machine, piloted a telehealth program for gynecological consultations with TeleUpchaar, and educated women on breast cancer self-examinations at the Public Health Center.",
       },
       {
         title: "Financial Empowerment Camp",
-        body: "Hosted a Women's Financial Empowerment Camp teaching financial independence, plus basket-weaving sessions with the Mahila Mandal group to help village women sell their products.",
+        body: "Working with Mahila Mandal groups, taught basket-weaving and financial strategies to increase independence and help women sell handmade products.",
+      },
+      {
+        title: "Menstrual Health Education Training",
+        body: "Partnered with PINKISHE to train teachers as Certified Menstrual Health Educators, increasing transparency about menstrual cycles from a younger age.",
       },
     ],
   },
@@ -219,35 +229,40 @@ export const PROJECTS = [
       "For he who has health has hope; and he who has hope, has everything.",
     quoteAuthor: "Owen Arthur",
     intro:
-      "Health is dedicated to improving the overall wellbeing of Bharog Baneri. We work with villagers to increase access to specialized medical services — dental, eyecare, women's health, and more — aiming to alleviate disparities in access to quality healthcare while addressing each community's specific needs.",
+      "The Health team is committed to delivering structured, evidence-informed health initiatives in Bharog Baneri. Recognizing the systemic barriers that limit residents' access to specialized medical care — including difficult terrain and a shortage of on-site specialists — the team organizes targeted health camps spanning dental, ocular, and cancer-education services, equips the Primary Health Center with essential medical equipment, and develops educational materials to build lasting health awareness within the community. Through this coordinated approach, we work to bring critical care directly to Bharog Baneri while fostering the health literacy needed for long-term community well-being.",
     highlights: [
       {
-        title: "Dental Camps",
-        body: "Held a 3-day dental camp providing in-depth care to villagers. We treated 250+ people, offering everything from general cleanings to extractions.",
-        image: null,
+        title: "Specialty Care Rotation Program",
+        body: "Established a monthly specialist outreach program at the Bharog Baneri PHC in partnership with Shri Sai Multispecialty Hospital, rotating visits from a gynecologist/OB-GYN, orthopedician, and optometrist to address the community's most critical gaps in specialized care. We coordinate community outreach, clinic preparation, and pre/post-visit surveys to track patient satisfaction and long-term health outcomes.",
+        image: "/images/projects/health-specialty-care.jpg",
       },
       {
-        title: "Waste Disposal Pilot",
-        body: "Built a dumpster in one ward and distributed trash cans to every household to test a larger-scale waste-disposal scheme.",
-        image: null,
+        title: "Eco-Tourism Bus Shelter",
+        body: "Developed Him-Viraam, an eco-tourism bus shelter near Kher Station in Ward 2, in collaboration with the Paonta Forest Department. Designed with bamboo and environmentally sustainable materials, the shelter provides residents with protection from extreme heat and rain during long wait times at a high-traffic stop.",
+        image: "/images/projects/health-bus-shelter.jpg",
+      },
+      {
+        title: "Spirometer for the PHC",
+        body: "Donated a spirometer to the Bharog Baneri PHC to address respiratory-health concerns stemming from high rates of smoking in the community, enabling Dr. Anirudh Ji to conduct on-site lung-function screenings for residents.",
+        image: "/images/projects/health-spirometer.jpg",
       },
     ],
     past: [
       {
-        title: "Trash Can Distribution (2024)",
-        body: "Distributed 120+ trash cans for wet and dry waste to each household in Ward 1, and designed, finalized, and funded a large communal dumpster for the ward.",
+        title: "Dental Camps",
+        body: "Partnered with NGO Saathi Cares to host a 4-day dental camp at the Bharog Baneri PHC and a mobile clinic across all wards, providing free dental cleanings and tooth extractions to 250+ villagers. Held an additional single-day camp at the local school to increase accessibility for children.",
       },
       {
-        title: "Telehealth Initiative (Fall 2021)",
-        body: "Built a foundational telehealth outline at the Bharog PHC — an informal WhatsApp-based platform to ease access to medical advice.",
+        title: "Women's x Health",
+        body: "Donated a fetal doppler machine, piloted a telehealth program for gynecological consultations with TeleUpchaar, and educated women on breast cancer self-examinations at the Public Health Center.",
       },
       {
-        title: "Cancer Education Camp (2019)",
-        body: "Ran educational camps with Global Cancer Concern India (GCCI) to help alleviate villagers' stress around cancer.",
+        title: "Cancer Education Camp",
+        body: "Partnered with Global Cancer Concern India to host a cancer-education camp in Bharog Baneri, providing villagers with accessible information and resources to address concerns and misconceptions around cancer.",
       },
       {
-        title: "Ocular Camp (2017–2018)",
-        body: "Collaborated with VisionSpring to host ocular camps; an optometrist screened villagers and delivered reading and prescription glasses as needed.",
+        title: "Ocular Camp",
+        body: "Collaborated with VisionSpring to bring an optometrist to the village, conducting vision screenings and distributing reading and prescription glasses to residents with unaddressed visual impairments.",
       },
     ],
   },
