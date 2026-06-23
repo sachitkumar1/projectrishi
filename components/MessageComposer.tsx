@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import RichTextEditor from "@/components/editor/RichTextEditor";
+import MergeTable, { defaultColumns, emptyRow, makeCol, type Col, type Rows } from "@/components/MergeTable";
+import EmailChipsInput from "@/components/EmailChipsInput";
+import { parseCsv } from "@/lib/csvParse";
+
+const normalize = (s: string) => s.toLowerCase().replace(/[\s_]+/g, "");
+const DEFAULT_KEYS = new Set(["firstname", "lastname", "email", "projectgroup", "fullname"]);
 
 type Lite = { email: string; name: string; group: string };
 type Mode = "announcement" | "email" | "newsletter";
@@ -36,7 +42,15 @@ export default function MessageComposer({
   const [mode, setMode] = useState<Mode>(initialMode);
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
-  const [mailMerge, setMailMerge] = useState(initialMode === "newsletter");
+  const [mailMerge, setMailMerge] = useState(false);
+  const [mergeSource, setMergeSource] = useState<"table" | "csv">("table");
+  // Build-a-table data and CSV-imported data are kept separately so switching
+  // between the two never loses what you built.
+  const [tableCols, setTableCols] = useState<Col[]>(() => defaultColumns());
+  const [tableRows, setTableRows] = useState<Rows>(() => [emptyRow(defaultColumns())]);
+  const [csvCols, setCsvCols] = useState<Col[]>([]);
+  const [csvRows, setCsvRows] = useState<Rows>([]);
+  const [csvNote, setCsvNote] = useState<string | null>(null);
   const [sender, setSender] = useState<"club" | "personal">("club");
 
   // announcement
@@ -44,8 +58,13 @@ export default function MessageComposer({
   const [annMembers, setAnnMembers] = useState<string[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
   // email
+  const [emailScope, setEmailScope] = useState<"members" | "group" | "club">("members");
   const [emailMembers, setEmailMembers] = useState<string[]>([]);
-  const [externalText, setExternalText] = useState("");
+  const [emailGroups, setEmailGroups] = useState<string[]>([]);
+  const [externalChips, setExternalChips] = useState<string[]>([]);
+
+  const activeCols = mergeSource === "table" ? tableCols : csvCols;
+  const activeRows = mergeSource === "table" ? tableRows : csvRows;
 
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,16 +87,13 @@ export default function MessageComposer({
   function switchMode(m: Mode) {
     setMode(m);
     setErr(null);
-    setMailMerge(m === "newsletter");
+    setMailMerge(false);
     if (m === "newsletter") setSender("club");
     else if (opts) setSender(opts.senders.clubConnected ? "club" : "personal");
     if (m === "announcement" && opts) setScopeKind(opts.announce.scopes[0] ?? "members");
   }
 
-  const externalEmails = useMemo(
-    () => externalText.split(/[\s,;]+/).map((e) => e.trim()).filter(Boolean),
-    [externalText],
-  );
+  const externalEmails = externalChips;
 
   // Can this person use the club address for an EMAIL with the current recipients?
   const clubAllowedForEmail = useMemo(() => {
@@ -85,9 +101,11 @@ export default function MessageComposer({
     if (opts.me.exec) return true;
     if (!opts.me.lead) return false;
     if (externalEmails.length > 0) return false;
+    if (emailScope === "club") return false; // whole club ≠ only own group
+    if (emailScope === "group") return emailGroups.length === 1 && emailGroups[0] === opts.me.group;
     const groupEmails = new Set(opts.email.allMembers.filter((m) => m.group === opts.me.group).map((m) => m.email));
-    return emailMembers.every((e) => groupEmails.has(e));
-  }, [opts, emailMembers, externalEmails]);
+    return emailMembers.length > 0 && emailMembers.every((e) => groupEmails.has(e));
+  }, [opts, emailMembers, emailGroups, emailScope, externalEmails]);
 
   function toggle<T>(list: T[], v: T): T[] {
     return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
@@ -102,18 +120,66 @@ export default function MessageComposer({
     [opts, q],
   );
 
+  // Insert chips = default tags + a chip for each custom (non-default) column.
+  const insertChips = useMemo(() => {
+    const defaults = (opts?.mergeTags ?? []).map((t) => t.tag);
+    const custom = activeCols
+      .filter((c) => c.name.trim() && !DEFAULT_KEYS.has(normalize(c.name)))
+      .map((c) => `{{${c.name.trim()}}}`);
+    return [...defaults, ...Array.from(new Set(custom))];
+  }, [opts, activeCols]);
+
+  function loadCsv(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { columns, rows } = parseCsv(String(reader.result));
+      if (columns.length === 0) { setCsvNote("That file looked empty."); return; }
+      const cols = columns.map((name) => makeCol(name));
+      const mapped = rows.map((r) => {
+        const o: Record<string, string> = {};
+        cols.forEach((c) => (o[c.id] = r[c.name] ?? ""));
+        return o;
+      });
+      setCsvCols(cols);
+      setCsvRows(mapped.length ? mapped : [emptyRow(cols)]);
+      setCsvNote(`Imported ${mapped.length} row${mapped.length === 1 ? "" : "s"}, ${cols.length} columns.`);
+    };
+    reader.readAsText(file);
+  }
+
+  function enableMerge(on: boolean) {
+    setMailMerge(on);
+    if (on && tableCols.length === 0) {
+      const cols = defaultColumns();
+      setTableCols(cols);
+      setTableRows([emptyRow(cols)]);
+    }
+  }
+
   async function submit() {
     if (!opts) return;
     setBusy(true);
     setErr(null);
     try {
       const payload: Record<string, unknown> = { mode, subject, bodyHtml, mailMerge, sender };
+      if (mailMerge && mode !== "newsletter") {
+        const rowsForSend = activeRows
+          .map((r) => {
+            const o: Record<string, string> = {};
+            activeCols.forEach((c) => { if (c.name.trim()) o[c.name.trim()] = r[c.id] ?? ""; });
+            return o;
+          })
+          .filter((o) => Object.values(o).some((v) => v && v.trim()));
+        payload.mergeRows = rowsForSend;
+      }
       if (mode === "announcement") {
         payload.scopeKind = scopeKind;
         payload.memberEmails = annMembers;
         payload.groups = groups;
       } else if (mode === "email") {
+        payload.scopeKind = emailScope;
         payload.memberEmails = emailMembers;
+        payload.groups = emailGroups;
         payload.externalEmails = externalEmails;
         payload.sender = clubAllowedForEmail ? sender : "personal";
       }
@@ -231,24 +297,46 @@ export default function MessageComposer({
 
           {mode === "email" && (
             <>
-              <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">Recipients</span>
-              <div className="mt-1.5 rounded-xl border border-ink/12 p-2">
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search members…" className="mb-2 w-full rounded-lg border border-ink/15 px-2.5 py-1.5 text-sm text-ink placeholder:text-ink/40" />
-                <div className="max-h-32 space-y-0.5 overflow-y-auto">
-                  {filteredEmail.map((m) => (
-                    <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm text-ink hover:bg-ink/5">
-                      <input type="checkbox" checked={emailMembers.includes(m.email)} onChange={() => setEmailMembers((l) => toggle(l, m.email))} className="accent-pine" />
-                      {m.name} <span className="text-xs text-ink/40">{GROUP_LABELS[m.group] ?? m.group}</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">Send to</span>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {(["members", "group", "club"] as const).map((s) => (
+                  <button key={s} onClick={() => setEmailScope(s)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${emailScope === s ? "bg-pine text-paper" : "border border-ink/15 text-ink/70 hover:bg-ink/5"}`}>
+                    {s === "members" ? "Specific people" : s === "group" ? "Project group" : "Whole club"}
+                  </button>
+                ))}
+              </div>
+
+              {emailScope === "members" && (
+                <div className="mt-3 rounded-xl border border-ink/12 p-2">
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search members…" className="mb-2 w-full rounded-lg border border-ink/15 px-2.5 py-1.5 text-sm text-ink placeholder:text-ink/40" />
+                  <div className="max-h-32 space-y-0.5 overflow-y-auto">
+                    {filteredEmail.map((m) => (
+                      <label key={m.email} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm text-ink hover:bg-ink/5">
+                        <input type="checkbox" checked={emailMembers.includes(m.email)} onChange={() => setEmailMembers((l) => toggle(l, m.email))} className="accent-pine" />
+                        {m.name} <span className="text-xs text-ink/40">{GROUP_LABELS[m.group] ?? m.group}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {emailScope === "group" && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(["E", "R", "W", "H"] as const).map((g) => (
+                    <label key={g} className={`cursor-pointer rounded-full px-3 py-1.5 text-xs font-medium ${emailGroups.includes(g) ? "bg-marigold text-pine-deep" : "border border-ink/15 text-ink/70"}`}>
+                      <input type="checkbox" checked={emailGroups.includes(g)} onChange={() => setEmailGroups((l) => toggle(l, g))} className="hidden" />
+                      {GROUP_LABELS[g] ?? g}
                     </label>
                   ))}
                 </div>
+              )}
+              {emailScope === "club" && <p className="mt-3 text-sm text-ink/60">Goes to every member of the club.</p>}
+
+              <div className="mt-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">Other email addresses</span>
+                <div className="mt-1.5">
+                  <EmailChipsInput value={externalChips} onChange={setExternalChips} />
+                </div>
               </div>
-              <input
-                value={externalText}
-                onChange={(e) => setExternalText(e.target.value)}
-                placeholder="Other email addresses (comma-separated)"
-                className="mt-2 w-full rounded-xl border border-ink/15 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
-              />
             </>
           )}
         </div>
@@ -278,23 +366,68 @@ export default function MessageComposer({
           </div>
         )}
 
-        {/* Mail merge */}
-        <div className="mt-4 rounded-xl border border-ink/12 p-3">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input type="checkbox" checked={mailMerge} onChange={(e) => setMailMerge(e.target.checked)} className="accent-pine" />
-            <span className="text-sm font-semibold text-ink">Personalize with mail merge</span>
-          </label>
-          {mailMerge && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-ink/50">Insert:</span>
-              {opts.mergeTags.map((t) => (
-                <button key={t.tag} onClick={() => insertRef.current?.(t.tag)} className="rounded-md bg-pine/10 px-2 py-0.5 text-xs font-medium text-pine hover:bg-pine/20" title={t.label}>
-                  {t.tag}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Mail merge (not available for newsletters) */}
+        {mode !== "newsletter" && (
+          <div className="mt-4 rounded-xl border border-ink/12 p-3">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input type="checkbox" checked={mailMerge} onChange={(e) => enableMerge(e.target.checked)} className="accent-pine" />
+              <span className="text-sm font-semibold text-ink">Personalize with mail merge</span>
+            </label>
+
+            {mailMerge && (
+              <div className="mt-3">
+                <p className="text-xs text-ink/55">
+                  Members fill in automatically. Add a row for anyone else (or to override / add attributes). The
+                  <strong> Email</strong> column says who each row is for.
+                </p>
+
+                {/* source toggle */}
+                <div className="mt-2 inline-flex rounded-full bg-ink/[0.06] p-1">
+                  <button onClick={() => setMergeSource("table")} className={`rounded-full px-3 py-1 text-xs font-semibold ${mergeSource === "table" ? "bg-pine text-paper" : "text-ink/60"}`}>
+                    Build a table
+                  </button>
+                  <button onClick={() => setMergeSource("csv")} className={`rounded-full px-3 py-1 text-xs font-semibold ${mergeSource === "csv" ? "bg-pine text-paper" : "text-ink/60"}`}>
+                    Upload CSV
+                  </button>
+                </div>
+
+                {mergeSource === "csv" && (
+                  <div className="mt-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-ink/15 px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-ink/5">
+                      Choose .csv file
+                      <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) loadCsv(f); e.target.value = ""; }} />
+                    </label>
+                    {csvNote && <span className="ml-2 text-xs text-ink/50">{csvNote}</span>}
+                  </div>
+                )}
+
+                {/* The editable table only shows when building one. Uploading a
+                    CSV hides it; the table you built is preserved for when you
+                    switch back. CSV data, once imported, is shown for review. */}
+                {mergeSource === "table" ? (
+                  <div className="mt-3">
+                    <MergeTable columns={tableCols} rows={tableRows} onChange={(c, r) => { setTableCols(c); setTableRows(r); }} />
+                  </div>
+                ) : (
+                  csvCols.length > 0 && (
+                    <div className="mt-3">
+                      <MergeTable columns={csvCols} rows={csvRows} onChange={(c, r) => { setCsvCols(c); setCsvRows(r); }} />
+                    </div>
+                  )
+                )}
+
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-ink/50">Insert:</span>
+                  {insertChips.map((tag) => (
+                    <button key={tag} onClick={() => insertRef.current?.(tag)} className="rounded-md bg-pine/10 px-2 py-0.5 text-xs font-medium text-pine hover:bg-pine/20">
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Body */}
         <div className="mt-4">

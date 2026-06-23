@@ -30,6 +30,7 @@ export type Announcement = {
   bodyHtml: string;
   recipientEmails: string[];
   mailMerge: boolean;
+  mergeData: Record<string, Record<string, string>>;
   createdAt: string;
 };
 
@@ -43,6 +44,7 @@ export type NewAnnouncement = {
   bodyHtml: string;
   recipientEmails: string[];
   mailMerge: boolean;
+  mergeData: Record<string, Record<string, string>>;
 };
 
 // in-memory fallback
@@ -59,6 +61,7 @@ const fromRow = (r: any): Announcement => ({
   bodyHtml: r.body_html,
   recipientEmails: r.recipient_emails ?? [],
   mailMerge: r.mail_merge ?? false,
+  mergeData: r.merge_data ?? {},
   createdAt: r.created_at,
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -76,6 +79,7 @@ export async function createAnnouncement(a: NewAnnouncement): Promise<Announceme
       subject: a.subject,
       body_html: a.bodyHtml,
       mail_merge: a.mailMerge,
+      merge_data: a.mergeData ?? {},
       recipient_emails: recipients,
       created_at: record.createdAt,
     });

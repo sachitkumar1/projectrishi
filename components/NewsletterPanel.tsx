@@ -48,6 +48,9 @@ export default function NewsletterPanel() {
   const [items, setItems] = useState<Item[]>([]);
   const [openItem, setOpenItem] = useState<Item | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [subs, setSubs] = useState<string[]>([]);
+  const [canViewSubs, setCanViewSubs] = useState(false);
+  const [showSubs, setShowSubs] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -60,12 +63,36 @@ export default function NewsletterPanel() {
     }
   }, []);
 
+  const loadSubs = useCallback(async () => {
+    try {
+      const r = await fetch("/api/lms/newsletter/subscribers");
+      if (!r.ok) return;
+      const d = await r.json();
+      setCanViewSubs(Boolean(d.canView));
+      setSubs(d.subscribers ?? []);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     load();
-    const onRefresh = () => load();
+    loadSubs();
+    const onRefresh = () => { load(); loadSubs(); };
     window.addEventListener("rishi:refresh", onRefresh);
     return () => window.removeEventListener("rishi:refresh", onRefresh);
-  }, [load]);
+  }, [load, loadSubs]);
+
+  function downloadSubsCsv() {
+    const csv = "Email\n" + subs.map((e) => e).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "newsletter-subscribers.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const unread = items.filter((i) => !i.read).length;
 
@@ -136,6 +163,18 @@ export default function NewsletterPanel() {
         ))}
       </div>
 
+      {canViewSubs && (
+        <button
+          onClick={() => setShowSubs(true)}
+          className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-pine/15 bg-paper py-2.5 text-xs font-semibold text-pine transition-colors hover:bg-pine/5"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          View subscribers ({subs.length})
+        </button>
+      )}
+
       {openItem && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-ink/50 p-4" onClick={closeModal}>
           <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-paper p-6 text-ink shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -175,6 +214,34 @@ export default function NewsletterPanel() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showSubs && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/50 p-4" onClick={() => setShowSubs(false)}>
+          <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-3xl bg-paper p-6 text-ink shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-display text-xl font-semibold text-pine-deep">Newsletter subscribers</h3>
+              <button onClick={() => setShowSubs(false)} className="grid h-8 w-8 place-items-center rounded-full text-ink/55 hover:bg-ink/10">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            </div>
+            <p className="mt-1 text-sm text-ink/55">{subs.length} {subs.length === 1 ? "person has" : "people have"} signed up from the website.</p>
+            <div className="mt-4 flex-1 overflow-y-auto rounded-xl border border-ink/10">
+              {subs.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-ink/50">No subscribers yet.</p>
+              ) : (
+                subs.map((e) => <p key={e} className="border-b border-ink/8 px-4 py-2 text-sm text-ink last:border-b-0">{e}</p>)
+              )}
+            </div>
+            <button
+              onClick={downloadSubsCsv}
+              disabled={subs.length === 0}
+              className="mt-4 self-end rounded-full bg-pine px-4 py-2 text-sm font-semibold text-paper hover:bg-pine-deep disabled:opacity-40"
+            >
+              Download CSV
+            </button>
           </div>
         </div>
       )}

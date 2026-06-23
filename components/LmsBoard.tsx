@@ -286,27 +286,10 @@ export default function LmsBoard() {
     );
   if (!meta) return null;
 
-  const roleBadges = Object.entries(meta.me.roles)
-    .filter(([, v]) => v)
-    .map(([k]) => ({
-      nmtLeader: "NMT Leader", newbie: "Newbie", lead: "Lead",
-      internal: "Internal", vpp: "VP/President", exec: "Exec",
-    }[k] as string));
-
   return (
     <div>
-      {/* identity + actions */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-pine px-3 py-1 text-xs font-semibold text-paper">
-            {GROUP_LABEL[meta.me.group]}
-          </span>
-          {roleBadges.map((b) => (
-            <span key={b} className="rounded-full border border-pine/20 bg-pine/[0.04] px-3 py-1 text-xs font-medium text-pine-deep">
-              {b}
-            </span>
-          ))}
-        </div>
+      {/* actions */}
+      <div className="flex flex-wrap items-center justify-end gap-4">
         <div className="flex gap-2">
           {meta.can.assignTasks && (
             <button onClick={() => setShowTaskForm(true)} className="btn-primary text-sm">+ Assign task</button>

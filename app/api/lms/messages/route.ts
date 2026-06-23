@@ -19,7 +19,7 @@ import {
 } from "@/lib/lms/gmail";
 import { createAnnouncement } from "@/lib/lms/announcements";
 import { createNewsletter, listSubscribers } from "@/lib/lms/newsletters";
-import { applyMergeTags } from "@/lib/lms/merge";
+import { applyMergeTags, buildMergeMap, type MergeMap, type MergeRow } from "@/lib/lms/merge";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,13 +32,11 @@ type Body = {
   subject?: string;
   bodyHtml?: string;
   mailMerge?: boolean;
+  mergeRows?: MergeRow[];
   sender?: "club" | "personal";
-  // announcement
   scopeKind?: "members" | "group" | "club";
   groups?: string[];
-  // announcement + email
   memberEmails?: string[];
-  // email
   externalEmails?: string[];
 };
 
@@ -50,17 +48,19 @@ async function deliver(
   subject: string,
   html: string,
   mailMerge: boolean,
+  mergeMap: MergeMap,
 ): Promise<{ sent: boolean; error: string | null }> {
   const fromEmail = conn.connectedGoogleEmail ?? conn.accountEmail;
   try {
     if (mailMerge) {
       for (const r of recipients) {
+        const row = mergeMap[lc(r)];
         await sendViaConnection(conn, {
           fromEmail,
           fromName,
           to: [r],
-          subject: applyMergeTags(subject, r),
-          html: applyMergeTags(html, r),
+          subject: applyMergeTags(subject, r, row),
+          html: applyMergeTags(html, r, row),
         });
       }
     } else {
@@ -83,19 +83,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 
-  const mode = body.mode ?? "email";
   const bodyHtml = (body.bodyHtml ?? "").trim();
   if (!bodyHtml || bodyHtml === "<p></p>")
     return NextResponse.json({ error: "Your message needs a body." }, { status: 400 });
 
+  const mode = body.mode ?? "email";
+  const mergeMap = mode !== "newsletter" && body.mailMerge ? buildMergeMap(body.mergeRows ?? []) : {};
+  const mergeEmails = Object.keys(mergeMap);
+
   // =========================================================================
-  //  NEWSLETTER
+  //  NEWSLETTER  (mail merge intentionally disabled)
   // =========================================================================
   if (mode === "newsletter") {
     if (!canPostNewsletter(me))
       return NextResponse.json({ error: "Only the Director of Outreach can post newsletters." }, { status: 403 });
     const subject = (body.subject ?? "").trim() || "[NEWSLETTER]";
-    const mailMerge = body.mailMerge !== false; // newsletters default ON
 
     const conn = await getGmailConnection(SHARED_SENDER);
     if (!conn)
@@ -110,11 +112,13 @@ export async function POST(req: Request) {
       senderEmail: conn.accountEmail,
       subject,
       bodyHtml,
-      mailMerge,
+      mailMerge: false,
     });
-    const { sent, error } = await deliver(conn, SHARED_FROM_NAME, recipients, subject, bodyHtml, mailMerge);
+    const { sent, error } = await deliver(conn, SHARED_FROM_NAME, recipients, subject, bodyHtml, false, {});
     return NextResponse.json({ ok: true, id: nl.id, recipients: recipients.length, emailSent: sent, sendError: error });
   }
+
+  const mailMerge = body.mailMerge === true;
 
   // =========================================================================
   //  ANNOUNCEMENT
@@ -123,7 +127,6 @@ export async function POST(req: Request) {
     if (!canPostAnnouncements(me))
       return NextResponse.json({ error: "You can't post announcements." }, { status: 403 });
     const subject = (body.subject ?? "").trim() || "[ANNOUNCEMENT]";
-    const mailMerge = body.mailMerge === true; // off by default
 
     const allowedScopes = new Set(announceScopes(me));
     const scopeKind = body.scopeKind ?? "members";
@@ -164,31 +167,40 @@ export async function POST(req: Request) {
       bodyHtml,
       recipientEmails: recipients,
       mailMerge,
+      mergeData: mailMerge ? mergeMap : {},
     });
-    const { sent, error } = await deliver(conn, fromName, recipients, subject, bodyHtml, mailMerge);
+    const { sent, error } = await deliver(conn, fromName, recipients, subject, bodyHtml, mailMerge, mergeMap);
     return NextResponse.json({ ok: true, id: ann.id, recipients: recipients.length, emailSent: sent, sendError: error });
   }
 
   // =========================================================================
-  //  EMAIL (any member -> any members and/or any addresses)
+  //  EMAIL  (any member -> any members and/or any addresses)
   // =========================================================================
   const subject = (body.subject ?? "").trim();
   if (!subject) return NextResponse.json({ error: "Emails need a subject." }, { status: 400 });
-  const mailMerge = body.mailMerge === true;
 
-  const memberEmails = (body.memberEmails ?? []).map(lc).filter((e) => findMember(e));
+  // Resolve member recipients from the chosen scope (any member can email anyone).
+  let scopeMembers: string[] = [];
+  const emailScope = body.scopeKind ?? "members";
+  if (emailScope === "club") {
+    scopeMembers = MEMBERS.map((m) => m.email);
+  } else if (emailScope === "group") {
+    const picked = (body.groups ?? []).filter((g) => ["E", "R", "W", "H"].includes(g));
+    scopeMembers = MEMBERS.filter((m) => picked.includes(m.group)).map((m) => m.email);
+  } else {
+    scopeMembers = (body.memberEmails ?? []).filter((e) => findMember(e));
+  }
   const externalEmails = (body.externalEmails ?? []).map((e) => e.trim()).filter(isEmail).map(lc);
-  const recipients = Array.from(new Set([...memberEmails, ...externalEmails]));
-  if (recipients.length === 0)
-    return NextResponse.json({ error: "Add at least one recipient." }, { status: 400 });
+  const tableEmails = mailMerge ? mergeEmails.filter(isEmail) : [];
+  const recipients = Array.from(new Set([...scopeMembers.map(lc), ...externalEmails, ...tableEmails]));
+  if (recipients.length === 0) return NextResponse.json({ error: "Add at least one recipient." }, { status: 400 });
 
-  let senderChoice = body.sender === "club" ? "club" : "personal";
-  if (senderChoice === "club" && !canEmailFromClub(me, recipients)) {
+  const senderChoice = body.sender === "club" ? "club" : "personal";
+  if (senderChoice === "club" && !canEmailFromClub(me, recipients))
     return NextResponse.json(
       { error: "You can only use the club email when writing to your own project group. Use your own email instead." },
       { status: 403 },
     );
-  }
   const conn = await getGmailConnection(senderChoice === "club" ? SHARED_SENDER : me.email);
   if (!conn)
     return NextResponse.json(
@@ -197,6 +209,6 @@ export async function POST(req: Request) {
     );
   const fromName = senderChoice === "club" ? SHARED_FROM_NAME : memberFullName(me);
 
-  const { sent, error } = await deliver(conn, fromName, recipients, subject, bodyHtml, mailMerge);
+  const { sent, error } = await deliver(conn, fromName, recipients, subject, bodyHtml, mailMerge, mergeMap);
   return NextResponse.json({ ok: true, recipients: recipients.length, emailSent: sent, sendError: error });
 }

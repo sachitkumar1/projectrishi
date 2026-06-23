@@ -148,3 +148,5 @@ alter table lms_newsletter_subscribers enable row level security;
 grant all privileges on table lms_newsletters to service_role;
 grant all privileges on table lms_newsletter_reads to service_role;
 grant all privileges on table lms_newsletter_subscribers to service_role;
+
+alter table lms_announcements add column if not exists merge_data jsonb not null default '{}'::jsonb;

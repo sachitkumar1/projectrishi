@@ -17,16 +17,19 @@ export async function GET() {
   const authorEmails = Array.from(new Set(announcements.map((a) => a.authorEmail)));
   const avatarMap = await getAvatars(authorEmails);
 
-  const items = announcements.map((a) => ({
-    id: a.id,
-    authorName: a.authorName,
-    authorAvatar: avatarMap[lc(a.authorEmail)] ?? null,
-    subject: a.mailMerge ? applyMergeTags(a.subject, me.email) : a.subject,
-    bodyHtml: a.mailMerge ? applyMergeTags(a.bodyHtml, me.email) : a.bodyHtml,
-    createdAt: a.createdAt,
-    read: a.read,
-    canDelete: lc(a.authorEmail) === lc(me.email),
-  }));
+  const items = announcements.map((a) => {
+    const override = a.mailMerge ? a.mergeData?.[lc(me.email)] : undefined;
+    return {
+      id: a.id,
+      authorName: a.authorName,
+      authorAvatar: avatarMap[lc(a.authorEmail)] ?? null,
+      subject: a.mailMerge ? applyMergeTags(a.subject, me.email, override) : a.subject,
+      bodyHtml: a.mailMerge ? applyMergeTags(a.bodyHtml, me.email, override) : a.bodyHtml,
+      createdAt: a.createdAt,
+      read: a.read,
+      canDelete: lc(a.authorEmail) === lc(me.email),
+    };
+  });
 
   return NextResponse.json({ announcements: items, unread: items.filter((i) => !i.read).length });
 }

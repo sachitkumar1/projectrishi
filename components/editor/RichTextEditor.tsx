@@ -201,10 +201,18 @@ export default function RichTextEditor({
         <Btn title="Quote" active={e.isActive("blockquote")} onClick={() => e.chain().focus().toggleBlockquote().run()}>❝</Btn>
         <Divider />
 
-        <Btn title="Align left" active={e.isActive({ textAlign: "left" })} onClick={() => e.chain().focus().setTextAlign("left").run()}>⯇</Btn>
-        <Btn title="Align center" active={e.isActive({ textAlign: "center" })} onClick={() => e.chain().focus().setTextAlign("center").run()}>≡</Btn>
-        <Btn title="Align right" active={e.isActive({ textAlign: "right" })} onClick={() => e.chain().focus().setTextAlign("right").run()}>⯈</Btn>
-        <Btn title="Justify" active={e.isActive({ textAlign: "justify" })} onClick={() => e.chain().focus().setTextAlign("justify").run()}>☰</Btn>
+        <Btn title="Align left" active={e.isActive({ textAlign: "left" })} onClick={() => e.chain().focus().setTextAlign("left").run()}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-4 w-4"><path d="M4 6h16M4 12h10M4 18h13" /></svg>
+        </Btn>
+        <Btn title="Align center" active={e.isActive({ textAlign: "center" })} onClick={() => e.chain().focus().setTextAlign("center").run()}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-4 w-4"><path d="M4 6h16M7 12h10M5 18h14" /></svg>
+        </Btn>
+        <Btn title="Align right" active={e.isActive({ textAlign: "right" })} onClick={() => e.chain().focus().setTextAlign("right").run()}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-4 w-4"><path d="M4 6h16M10 12h10M7 18h13" /></svg>
+        </Btn>
+        <Btn title="Justify" active={e.isActive({ textAlign: "justify" })} onClick={() => e.chain().focus().setTextAlign("justify").run()}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-4 w-4"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </Btn>
         <Divider />
 
         {/* Link */}
