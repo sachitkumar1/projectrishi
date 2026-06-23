@@ -38,6 +38,7 @@ type Body = {
   groups?: string[];
   memberEmails?: string[];
   externalEmails?: string[];
+  cc?: string[];
 };
 
 // Send to everyone, personalizing per-recipient when mail merge is on.
@@ -49,6 +50,7 @@ async function deliver(
   html: string,
   mailMerge: boolean,
   mergeMap: MergeMap,
+  cc: string[] = [],
 ): Promise<{ sent: boolean; error: string | null }> {
   const fromEmail = conn.connectedGoogleEmail ?? conn.accountEmail;
   try {
@@ -59,12 +61,13 @@ async function deliver(
           fromEmail,
           fromName,
           to: [r],
+          cc: cc.length ? cc : undefined,
           subject: applyMergeTags(subject, r, row),
           html: applyMergeTags(html, r, row),
         });
       }
     } else {
-      await sendViaConnection(conn, { fromEmail, fromName, to: [fromEmail], bcc: recipients, subject, html });
+      await sendViaConnection(conn, { fromEmail, fromName, to: [fromEmail], cc: cc.length ? cc : undefined, bcc: recipients, subject, html });
     }
     return { sent: true, error: null };
   } catch (e) {
@@ -209,6 +212,7 @@ export async function POST(req: Request) {
     );
   const fromName = senderChoice === "club" ? SHARED_FROM_NAME : memberFullName(me);
 
-  const { sent, error } = await deliver(conn, fromName, recipients, subject, bodyHtml, mailMerge, mergeMap);
+  const cc = (body.cc ?? []).map((e) => e.trim()).filter(isEmail).map(lc).filter((e) => !recipients.includes(e));
+  const { sent, error } = await deliver(conn, fromName, recipients, subject, bodyHtml, mailMerge, mergeMap, cc);
   return NextResponse.json({ ok: true, recipients: recipients.length, emailSent: sent, sendError: error });
 }

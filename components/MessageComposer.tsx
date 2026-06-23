@@ -29,25 +29,53 @@ const GROUP_LABELS: Record<string, string> = {
 };
 const MODE_LABEL: Record<Mode, string> = { announcement: "Announcement", email: "Email", newsletter: "Newsletter" };
 
+export type ComposerPrefill = { subject: string; bodyHtml: string; cc: string[] };
+
+// Build merge columns from the {{tokens}} in a template: one column per unique
+// token (preserving how it was written), plus a mandatory Email column.
+function columnsFromTemplate(...texts: string[]): Col[] {
+  const seen = new Set<string>();
+  const cols: Col[] = [];
+  const re = /\{\{\s*([^}]+?)\s*\}\}/g;
+  for (const text of texts) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const name = m[1].trim();
+      const key = normalize(name);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      cols.push(makeCol(name));
+    }
+  }
+  if (!seen.has("email")) cols.push(makeCol("Email"));
+  return cols;
+}
+
 export default function MessageComposer({
   initialMode,
   onClose,
   onPosted,
+  prefill,
 }: {
   initialMode: Mode;
   onClose: () => void;
   onPosted: (msg: string) => void;
+  prefill?: ComposerPrefill;
 }) {
+  const hasTemplateTokens = prefill ? /\{\{\s*[^}]+?\s*\}\}/.test(prefill.subject + prefill.bodyHtml) : false;
   const [opts, setOpts] = useState<Options | null>(null);
-  const [mode, setMode] = useState<Mode>(initialMode);
-  const [subject, setSubject] = useState("");
-  const [bodyHtml, setBodyHtml] = useState("");
-  const [mailMerge, setMailMerge] = useState(false);
+  const [mode, setMode] = useState<Mode>(prefill ? "email" : initialMode);
+  const [subject, setSubject] = useState(prefill?.subject ?? "");
+  const [bodyHtml, setBodyHtml] = useState(prefill?.bodyHtml ?? "");
+  const [cc, setCc] = useState<string[]>(prefill?.cc ?? []);
+  const [mailMerge, setMailMerge] = useState(hasTemplateTokens);
   const [mergeSource, setMergeSource] = useState<"table" | "csv">("table");
   // Build-a-table data and CSV-imported data are kept separately so switching
   // between the two never loses what you built.
-  const [tableCols, setTableCols] = useState<Col[]>(() => defaultColumns());
-  const [tableRows, setTableRows] = useState<Rows>(() => [emptyRow(defaultColumns())]);
+  const [tableCols, setTableCols] = useState<Col[]>(() =>
+    hasTemplateTokens && prefill ? columnsFromTemplate(prefill.subject, prefill.bodyHtml) : defaultColumns(),
+  );
+  const [tableRows, setTableRows] = useState<Rows>(() => [emptyRow(tableCols)]);
   const [csvCols, setCsvCols] = useState<Col[]>([]);
   const [csvRows, setCsvRows] = useState<Rows>([]);
   const [csvNote, setCsvNote] = useState<string | null>(null);
@@ -181,6 +209,7 @@ export default function MessageComposer({
         payload.memberEmails = emailMembers;
         payload.groups = emailGroups;
         payload.externalEmails = externalEmails;
+        payload.cc = cc;
         payload.sender = clubAllowedForEmail ? sender : "personal";
       }
       const res = await fetch("/api/lms/messages", {
@@ -337,6 +366,13 @@ export default function MessageComposer({
                   <EmailChipsInput value={externalChips} onChange={setExternalChips} />
                 </div>
               </div>
+
+              <div className="mt-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">CC</span>
+                <div className="mt-1.5">
+                  <EmailChipsInput value={cc} onChange={setCc} placeholder="CC addresses (optional)…" />
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -433,7 +469,7 @@ export default function MessageComposer({
         <div className="mt-4">
           <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">Message</span>
           <div className="mt-1.5">
-            <RichTextEditor value="" onChange={setBodyHtml} registerInsert={(fn) => (insertRef.current = fn)} placeholder="Write your message…" />
+            <RichTextEditor value={prefill?.bodyHtml ?? ""} onChange={setBodyHtml} registerInsert={(fn) => (insertRef.current = fn)} placeholder="Write your message…" />
           </div>
         </div>
 

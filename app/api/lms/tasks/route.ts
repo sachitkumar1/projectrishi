@@ -1,17 +1,33 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
-import { canSeeMember, findMember } from "@/lib/members";
+import { canSeeMember, findMember, MEMBERS } from "@/lib/members";
 import { canAssignTasks, canAssignTaskTo, canManageTask } from "@/lib/lms/permissions";
 import { createTasks, listTasksForMember } from "@/lib/lms/store";
-import type { NewTaskInput } from "@/lib/lms/types";
+import type { NewTaskInput, Task } from "@/lib/lms/types";
 
 export const dynamic = "force-dynamic";
+
+// Auto-CC for a task email: if the assigner is a lead, CC every project lead of
+// the assignee's group; otherwise CC the assigner. The doer can remove these.
+function autoCc(t: Task): string[] {
+  const assigner = findMember(t.assignerEmail);
+  const assignee = findMember(t.assigneeEmail);
+  if (!assigner) return [];
+  if (assigner.roles.lead && assignee) {
+    return MEMBERS.filter((m) => m.group === assignee.group && m.roles.lead && !m.hidden).map((m) => m.email);
+  }
+  return [assigner.email];
+}
 
 export async function GET() {
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   const tasks = await listTasksForMember(me.email);
-  const withFlags = tasks.map((t) => ({ ...t, canManage: canManageTask(me, t) }));
+  const withFlags = tasks.map((t) => ({
+    ...t,
+    canManage: canManageTask(me, t),
+    ccEmails: t.emailTemplate ? autoCc(t) : [],
+  }));
   return NextResponse.json({ tasks: withFlags });
 }
 
@@ -54,6 +70,9 @@ export async function POST(req: Request) {
       tags: Array.isArray(body.tags) ? body.tags : [],
       dueAt: body.dueAt,
       requiresFile: Boolean(body.requiresFile),
+      emailTemplate: body.emailTemplate && (body.emailTemplate.subject || body.emailTemplate.bodyHtml)
+        ? { subject: body.emailTemplate.subject ?? "", bodyHtml: body.emailTemplate.bodyHtml ?? "" }
+        : null,
       assigneeEmails,
     },
     me.email

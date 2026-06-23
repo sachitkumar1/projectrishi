@@ -34,6 +34,8 @@ export type MemberProfile = {
 // ---- Tasks ----
 export type TaskStatus = "not_complete" | "pending" | "complete";
 
+export type EmailTemplate = { subject: string; bodyHtml: string };
+
 export type Task = {
   id: string;
   groupId: string; // shared by all copies created in one "assign to multiple people" action
@@ -42,6 +44,7 @@ export type Task = {
   tags: string[];
   dueAt: string; // ISO datetime
   requiresFile: boolean; // upload deferred — flag kept for the future
+  emailTemplate: EmailTemplate | null;
   assignerEmail: string;
   assigneeEmail: string;
   status: TaskStatus;
@@ -56,6 +59,7 @@ export type NewTaskInput = {
   tags: string[];
   dueAt: string;
   requiresFile: boolean;
+  emailTemplate: EmailTemplate | null;
   assigneeEmails: string[]; // one task row is created per assignee
 };
 

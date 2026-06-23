@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Avatar from "@/components/Avatar";
+import RichTextEditor from "@/components/editor/RichTextEditor";
+import MessageComposer, { type ComposerPrefill } from "@/components/MessageComposer";
 
 // ----- types mirrored from the API JSON -----
 type Group = "E" | "R" | "W" | "H";
@@ -27,11 +29,13 @@ type Meta = {
   eventMemberTargets: Lite[];
   allMembers: Lite[];
 };
+type EmailTemplate = { subject: string; bodyHtml: string };
 type Task = {
   id: string; groupId: string; title: string; description: string; tags: string[];
   dueAt: string; requiresFile: boolean; assignerEmail: string;
   assigneeEmail: string; status: "not_complete" | "pending" | "complete";
   submittedAt: string | null; archived: boolean; createdAt: string; canManage?: boolean;
+  emailTemplate?: EmailTemplate | null; ccEmails?: string[];
 };
 type ClubEvent = {
   id: string; title: string; description: string; startAt: string;
@@ -97,6 +101,7 @@ export default function LmsBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
+  const [composeTask, setComposeTask] = useState<Task | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editingEvent, setEditingEvent] = useState<ClubEvent | null>(null);
@@ -339,6 +344,7 @@ export default function LmsBoard() {
             {activeToMe.map((t) => (
               <TaskRow key={t.id} task={t} role="assignee"
                 onSubmit={() => act(t.id, "submit")}
+                onComposeEmail={() => setComposeTask(t)}
                 onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)}
                 onArchive={() => act(t.id, "archive")} />
             ))}
@@ -401,6 +407,19 @@ export default function LmsBoard() {
       {(showTaskForm || editingTask) && (
         <TaskForm meta={meta} editing={editingTask} onClose={() => { setShowTaskForm(false); setEditingTask(null); }}
           onCreated={() => { setShowTaskForm(false); setEditingTask(null); load(); }} />
+      )}
+
+      {composeTask && composeTask.emailTemplate && (
+        <MessageComposer
+          initialMode="email"
+          prefill={{
+            subject: composeTask.emailTemplate.subject,
+            bodyHtml: composeTask.emailTemplate.bodyHtml,
+            cc: composeTask.ccEmails ?? [],
+          }}
+          onClose={() => setComposeTask(null)}
+          onPosted={() => setComposeTask(null)}
+        />
       )}
       {(showEventForm || editingEvent) && (
         <EventForm meta={meta} editing={editingEvent} onClose={() => { setShowEventForm(false); setEditingEvent(null); }}
@@ -522,10 +541,11 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 // --------------------------------------------------------------------- task row
 function TaskRow({
-  task, role, assigneeName, assigneeAvatar, onSubmit, onApprove, onEdit, onDelete, onArchive,
+  task, role, assigneeName, assigneeAvatar, onSubmit, onApprove, onEdit, onDelete, onArchive, onComposeEmail,
 }: {
   task: Task; role: "assignee" | "assigner"; assigneeName?: string; assigneeAvatar?: string | null;
   onSubmit?: () => void; onApprove?: () => void; onEdit?: () => void; onDelete?: () => void; onArchive?: () => void;
+  onComposeEmail?: () => void;
 }) {
   const overdue = task.submittedAt
     ? new Date(task.submittedAt) > new Date(task.dueAt)
@@ -584,11 +604,19 @@ function TaskRow({
         )}
       </div>
 
-      {role === "assignee" && task.status === "not_complete" && (
-        <button onClick={onSubmit} className="mt-3 rounded-full bg-pine px-4 py-2 text-xs font-semibold text-paper transition-transform hover:scale-[1.02]">
-          Mark complete
-        </button>
-      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {role === "assignee" && task.emailTemplate && (
+          <button onClick={onComposeEmail} className="inline-flex items-center gap-1.5 rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep transition-transform hover:scale-[1.02]">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 7.5 8.5 6 8.5-6" /></svg>
+            Compose email
+          </button>
+        )}
+        {role === "assignee" && task.status === "not_complete" && (
+          <button onClick={onSubmit} className="rounded-full bg-pine px-4 py-2 text-xs font-semibold text-paper transition-transform hover:scale-[1.02]">
+            Mark complete
+          </button>
+        )}
+      </div>
       {role === "assigner" && task.status !== "complete" && (
         <button onClick={onApprove} className="mt-3 rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep transition-transform hover:scale-[1.02]">
           {task.status === "pending" ? "Approve as complete" : "Mark complete"}
@@ -830,6 +858,13 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [emailEnabled, setEmailEnabled] = useState(!!editing?.emailTemplate);
+  const [emailSubject, setEmailSubject] = useState(editing?.emailTemplate?.subject ?? "");
+  const [emailBody, setEmailBody] = useState(editing?.emailTemplate?.bodyHtml ?? "");
+  const emailTemplate =
+    emailEnabled && (emailSubject.trim() || emailBody.replace(/<[^>]*>/g, "").trim())
+      ? { subject: emailSubject, bodyHtml: emailBody }
+      : null;
 
   const toggleAssignee = (email: string) =>
     setAssignees((a) =>
@@ -866,12 +901,13 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
           body: JSON.stringify({
             action: "edit", title, description, dueAt: dueIso,
             requiresFile, tags, assigneeEmail: assignees[0] ?? editing.assigneeEmail,
+            emailTemplate,
           }),
         });
       } else {
         await api("/api/lms/tasks", {
           method: "POST",
-          body: JSON.stringify({ title, description, dueAt: dueIso, requiresFile, tags, assigneeEmails: resolveAssignees() }),
+          body: JSON.stringify({ title, description, dueAt: dueIso, requiresFile, tags, emailTemplate, assigneeEmails: resolveAssignees() }),
         });
       }
       onCreated();
@@ -946,6 +982,29 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
           <input type="checkbox" checked={requiresFile} onChange={(e) => setRequiresFile(e.target.checked)} />
           Require a file upload <span className="text-xs text-ink/40">(upload coming soon — recorded for later)</span>
         </label>
+
+        {/* Optional email template the doer can launch with one click */}
+        <div className="rounded-xl border border-pine/12 p-3">
+          <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <input type="checkbox" checked={emailEnabled} onChange={(e) => setEmailEnabled(e.target.checked)} className="accent-pine" />
+            Attach an email template
+          </label>
+          <p className="mt-1 text-xs text-ink/50">
+            The person doing this task gets a one-click button to open a pre-filled email. Any{" "}
+            <code className="rounded bg-ink/[0.06] px-1">{"{{word}}"}</code> becomes a mail-merge column for them to fill.
+          </p>
+          {emailEnabled && (
+            <div className="mt-3 space-y-2">
+              <input
+                className={inputCls}
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="Email subject (e.g. Hello {{firstName}})"
+              />
+              <RichTextEditor value={editing?.emailTemplate?.bodyHtml ?? ""} onChange={setEmailBody} placeholder="Write the email template…" />
+            </div>
+          )}
+        </div>
 
         {err && <p className="text-sm text-red-600">{err}</p>}
         <button onClick={submit} disabled={busy} className="btn-primary w-full justify-center disabled:opacity-60">
