@@ -54,7 +54,7 @@ export const MEMBERS: Member[] = [
   { email: "arnavmishra@berkeley.edu", firstName: "Arnav", lastName: "Mishra", group: "R", roles: roles({}) },
   { email: "megha_ramachandran@berkeley.edu", firstName: "Megha", lastName: "Ramachandran", group: "E", roles: roles({ lead: true }) },
   { email: "nikita_jadhav@berkeley.edu", firstName: "Nikita", lastName: "Jadhav", group: "W", roles: roles({ exec: true, outreach: true }) },
-  { email: "autkarsh@berkeley.edu", firstName: "Utkarsh", lastName: "Aggarwal", group: "E", roles: roles({ lead: true }) },
+  { email: "autkarsh@berkeley.edu", firstName: "Utkarsh", lastName: "Agarwal", group: "E", roles: roles({ lead: true }) },
   { email: "tanyagoel101@berkeley.edu", firstName: "Tanya", lastName: "Goel", group: "H", roles: roles({ vpp: true, exec: true }) },
   { email: "grishma_jain@berkeley.edu", firstName: "Grishma", lastName: "Jain", group: "E", roles: roles({ vpp: true, exec: true }) },
   { email: "akotte@berkeley.edu", firstName: "Advik", lastName: "Kotte", group: "W", roles: roles({ nmtLeader: true }) },
