@@ -15,7 +15,6 @@ reminders:
 name: Send Reminder Emails
 runs-on: ubuntu-latest
 
-```
 steps:
   - name: Call reminder endpoint
     env:
@@ -33,4 +32,3 @@ steps:
         -H "Authorization: Bearer $CRON_SECRET")
 
       echo "$response"
-```
