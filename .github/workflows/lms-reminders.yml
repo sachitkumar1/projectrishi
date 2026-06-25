@@ -1,20 +1,36 @@
 name: LMS Reminders
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
-  workflow_dispatch:
+push:
+branches:
+- main
+
+workflow_dispatch:
+
+schedule:
+- cron: '*/5 * * * *'
 
 jobs:
-  reminders:
-    runs-on: ubuntu-latest
+reminders:
+name: Send Reminder Emails
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Call reminder endpoint
-        env:
-          SITE_URL: ${{ secrets.SITE_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          curl -X POST \
-            "$SITE_URL/api/lms/cron/reminders" \
-            -H "Authorization: Bearer $CRON_SECRET"
+```
+steps:
+  - name: Call reminder endpoint
+    env:
+      SITE_URL: ${{ secrets.SITE_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    run: |
+      echo "Calling reminder endpoint..."
+
+      response=$(curl \
+        --silent \
+        --show-error \
+        --fail \
+        -X POST \
+        "$SITE_URL/api/lms/cron/reminders" \
+        -H "Authorization: Bearer $CRON_SECRET")
+
+      echo "$response"
+```
