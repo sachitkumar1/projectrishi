@@ -32,14 +32,22 @@ const htmlFromText = (text: string) =>
     text,
   ).replace(/\n/g, "<br>")}</div>`;
 
+// `datetime-local` values are converted to UTC before being saved. Vercel/Node
+// often formats dates in UTC by default, which made task emails show due times
+// 7+ hours ahead of what the dashboard form showed. Always render LMS emails in
+// the club's local timezone so the email matches the selected due time.
+const LMS_TIME_ZONE = "America/Los_Angeles";
+
 const fmtDue = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, {
+  new Date(iso).toLocaleString("en-US", {
+    timeZone: LMS_TIME_ZONE,
     weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZoneName: "short",
   });
 
 /**
