@@ -50,6 +50,7 @@ export default function NewsletterPanel() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [subs, setSubs] = useState<string[]>([]);
   const [canViewSubs, setCanViewSubs] = useState(false);
+  const [subsError, setSubsError] = useState<string | null>(null);
   const [showSubs, setShowSubs] = useState(false);
 
   const load = useCallback(async () => {
@@ -70,6 +71,7 @@ export default function NewsletterPanel() {
       const d = await r.json();
       setCanViewSubs(Boolean(d.canView));
       setSubs(d.subscribers ?? []);
+      setSubsError(d.error ?? null);
     } catch {
       /* ignore */
     }
@@ -229,7 +231,9 @@ export default function NewsletterPanel() {
             </div>
             <p className="mt-1 text-sm text-ink/55">{subs.length} {subs.length === 1 ? "person has" : "people have"} signed up from the website.</p>
             <div className="mt-4 flex-1 overflow-y-auto rounded-xl border border-ink/10">
-              {subs.length === 0 ? (
+              {subsError ? (
+                <p className="px-4 py-8 text-center text-sm text-red-600">Couldn&rsquo;t load subscribers: {subsError}</p>
+              ) : subs.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-ink/50">No subscribers yet.</p>
               ) : (
                 subs.map((e) => <p key={e} className="border-b border-ink/8 px-4 py-2 text-sm text-ink last:border-b-0">{e}</p>)
