@@ -2,7 +2,7 @@ name: LMS Reminders
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -15,4 +15,6 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -X POST             "$SITE_URL/api/lms/cron/reminders"             -H "Authorization: Bearer $CRON_SECRET"
+          curl -X POST \
+            "$SITE_URL/api/lms/cron/reminders" \
+            -H "Authorization: Bearer $CRON_SECRET"
