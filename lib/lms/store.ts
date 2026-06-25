@@ -353,6 +353,110 @@ export async function setTaskArchived(id: string, archived: boolean): Promise<Ta
   return patchTask(id, { archived });
 }
 
+// ---- Part 8: whole-club listings (P/VP Full Club Overview) ----
+export async function listAllTasks(): Promise<Task[]> {
+  if (usingSupabase) {
+    const { data, error } = await sb().from("lms_tasks").select("*").order("due_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(taskFromRow);
+  }
+  return [...mem.tasks].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+}
+
+export async function listAllEvents(): Promise<ClubEvent[]> {
+  if (usingSupabase) {
+    const { data, error } = await sb().from("lms_events").select("*").order("start_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(eventFromRow);
+  }
+  return [...mem.events].sort((a, b) => a.startAt.localeCompare(b.startAt));
+}
+
+// ---- Part 3: fetch + edit a whole task group (add/remove assignees) ----
+export async function getTasksByGroup(groupId: string): Promise<Task[]> {
+  if (usingSupabase) {
+    const { data, error } = await sb().from("lms_tasks").select("*").eq("group_id", groupId);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(taskFromRow);
+  }
+  return mem.tasks.filter((t) => (t.groupId || t.id) === groupId);
+}
+
+export type GroupEdit = {
+  title: string;
+  description: string;
+  tags: string[];
+  dueAt: string;
+  requiresFile: boolean;
+  requireSubmission: boolean;
+  emailTemplate: { subject: string; bodyHtml: string } | null;
+  assigneeEmails: string[]; // the DESIRED full set of assignees
+};
+
+/**
+ * Apply a single edit across an entire task group: update shared fields on the
+ * rows that stay, create fresh rows for newly-added assignees, and delete the
+ * rows of assignees that were removed. Returns the new rows (so the caller can
+ * email them) and how many were removed.
+ */
+export async function editTaskGroup(
+  groupId: string,
+  assignerEmail: string,
+  edit: GroupEdit,
+): Promise<{ added: Task[]; removed: Task[]; retained: Task[] }> {
+  const rows = await getTasksByGroup(groupId);
+  const desired = Array.from(new Set(edit.assigneeEmails.map(lc)));
+  const toAdd = desired.filter((e) => !rows.some((r) => eq(r.assigneeEmail, e)));
+  const toRemove = rows.filter((r) => !desired.includes(lc(r.assigneeEmail)));
+  const retained = rows.filter((r) => desired.includes(lc(r.assigneeEmail)));
+
+  const shared = {
+    title: edit.title,
+    description: edit.description,
+    tags: edit.tags,
+    due_at: edit.dueAt,
+    requires_file: edit.requiresFile,
+    require_submission: edit.requireSubmission,
+    email_template: edit.emailTemplate,
+  };
+
+  for (const r of retained) {
+    await patchTask(r.id, { ...shared, history: [...r.history, historyEntry("edited", assignerEmail)] });
+  }
+  for (const r of toRemove) await deleteTask(r.id);
+
+  let added: Task[] = [];
+  if (toAdd.length) {
+    if (usingSupabase) {
+      const insertRows = toAdd.map((assignee) => ({
+        group_id: groupId,
+        ...shared,
+        assigner_email: assignerEmail,
+        assignee_email: assignee,
+        status: "not_complete",
+        history: [historyEntry("created", assignerEmail)],
+        comments: [],
+        reminders_sent: [],
+      }));
+      const { data, error } = await sb().from("lms_tasks").insert(insertRows).select("*");
+      if (error) throw new Error(error.message);
+      added = (data ?? []).map(taskFromRow);
+    } else {
+      added = toAdd.map((assignee) =>
+        mkSeedTask({
+          id: uid(), groupId, title: edit.title, description: edit.description, tags: edit.tags,
+          dueAt: edit.dueAt, requiresFile: edit.requiresFile, emailTemplate: edit.emailTemplate,
+          assignerEmail, assigneeEmail: assignee, status: "not_complete", submittedAt: null,
+          archived: false, createdAt: now(),
+        }),
+      );
+      added.forEach((t) => (t.requireSubmission = edit.requireSubmission));
+      mem.tasks.push(...added);
+    }
+  }
+  return { added, removed: toRemove, retained };
+}
+
 // ---- reminder support (cron) ----------------------------------------------
 export async function listRemindableTasks(): Promise<Task[]> {
   if (usingSupabase) {

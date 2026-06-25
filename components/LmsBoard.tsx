@@ -101,6 +101,29 @@ const CAL_BY = { bg: "rgba(70,107,176,0.28)", fg: "#1c3559" };
 const taskKind = (t: Task, email: string): "to" | "by" =>
   t.assigneeEmail.toLowerCase() === email.toLowerCase() ? "to" : "by";
 
+// ---- Full Club Overview (P/VP) ----
+type Lane = "E" | "R" | "W" | "H" | "NMT" | "OTHER";
+type OTask = Task & { lane: Lane; canManage?: boolean };
+type OEvent = ClubEvent & { lane: Lane; canManage?: boolean };
+type Overview = {
+  tasks: OTask[];
+  events: OEvent[];
+  members: Record<string, { name: string; group: Group; avatar: string | null }>;
+};
+const LANE_ORDER: Lane[] = ["E", "R", "W", "H", "NMT", "OTHER"];
+const LANE_LABEL: Record<Lane, string> = {
+  E: "Education", R: "Water & Sanitation", W: "Women's Empowerment", H: "Health",
+  NMT: "New Member Training", OTHER: "Other",
+};
+const LANE_COLOR: Record<Lane, { bg: string; fg: string; dot: string }> = {
+  E: { bg: "rgba(226,160,47,0.40)", fg: "#5c3d00", dot: "#e2a02f" },
+  R: { bg: "rgba(70,107,176,0.30)", fg: "#1c3559", dot: "#466bb0" },
+  W: { bg: "rgba(150,90,160,0.30)", fg: "#48214f", dot: "#965aa0" },
+  H: { bg: "rgba(193,84,96,0.28)", fg: "#5c2230", dot: "#c15460" },
+  NMT: { bg: "rgba(91,124,106,0.34)", fg: "#143628", dot: "#5b7c6a" },
+  OTHER: { bg: "rgba(60,60,60,0.16)", fg: "#333333", dot: "#777777" },
+};
+
 async function api(url: string, opts?: RequestInit) {
   const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
   const data = await res.json().catch(() => ({}));
@@ -124,6 +147,8 @@ export default function LmsBoard() {
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [detailEventId, setDetailEventId] = useState<string | null>(null);
+  const [overviewOn, setOverviewOn] = useState(false);
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [calConnected, setCalConnected] = useState(false);
@@ -167,6 +192,13 @@ export default function LmsBoard() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Full Club Overview (P/VP only): (re)fetch whenever it's on and data changes.
+  const loadOverview = useCallback(async () => {
+    try { setOverview(await api("/api/lms/overview")); }
+    catch { setOverview(null); }
+  }, []);
+  useEffect(() => { if (overviewOn) loadOverview(); }, [overviewOn, tasks, events, loadOverview]);
+
   useEffect(() => {
     (async () => {
       const params = new URLSearchParams(window.location.search);
@@ -188,12 +220,16 @@ export default function LmsBoard() {
 
   const myEmail = meta?.me.email ?? "";
   const nameOf = useCallback(
-    (email: string) => meta?.allMembers.find((m) => m.email.toLowerCase() === email.toLowerCase())?.name ?? email,
-    [meta]
+    (email: string) =>
+      meta?.allMembers.find((m) => m.email.toLowerCase() === email.toLowerCase())?.name ??
+      overview?.members[email.toLowerCase()]?.name ?? email,
+    [meta, overview]
   );
   const avatarOf = useCallback(
-    (email: string) => meta?.allMembers.find((m) => m.email.toLowerCase() === email.toLowerCase())?.avatar ?? null,
-    [meta]
+    (email: string) =>
+      meta?.allMembers.find((m) => m.email.toLowerCase() === email.toLowerCase())?.avatar ??
+      overview?.members[email.toLowerCase()]?.avatar ?? null,
+    [meta, overview]
   );
 
   const assignedToMe = useMemo(
@@ -238,8 +274,26 @@ export default function LmsBoard() {
     () => (openGroupKey ? tasks.filter((t) => (t.groupId || t.id) === openGroupKey) : []),
     [tasks, openGroupKey]
   );
-  const detailTask = useMemo(() => tasks.find((t) => t.id === detailTaskId) ?? null, [tasks, detailTaskId]);
-  const detailEvent = useMemo(() => events.find((e) => e.id === detailEventId) ?? null, [events, detailEventId]);
+  const detailTask = useMemo(
+    () => tasks.find((t) => t.id === detailTaskId) ?? overview?.tasks.find((t) => t.id === detailTaskId) ?? null,
+    [tasks, overview, detailTaskId]
+  );
+  const detailEvent = useMemo(
+    () => events.find((e) => e.id === detailEventId) ?? overview?.events.find((e) => e.id === detailEventId) ?? null,
+    [events, overview, detailEventId]
+  );
+  // All assignees currently on the group of the task being edited (for multi-assignee edit).
+  const editingGroupAssignees = useMemo(() => {
+    if (!editingTask) return [];
+    const key = editingTask.groupId || editingTask.id;
+    const pool = [...tasks, ...(overview?.tasks ?? [])];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of pool) {
+      if ((t.groupId || t.id) === key && !seen.has(t.id)) { seen.add(t.id); out.push(t.assigneeEmail); }
+    }
+    return Array.from(new Set(out));
+  }, [editingTask, tasks, overview]);
 
   // ---- task actions ----
   const callTask = useCallback(async (taskId: string, body: Record<string, unknown>) => {
@@ -300,7 +354,13 @@ export default function LmsBoard() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-end gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        {meta.me.roles.vpp ? (
+          <button onClick={() => setOverviewOn((v) => !v)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${overviewOn ? "bg-pine text-paper" : "border border-pine/25 text-pine-deep hover:bg-pine/5"}`}>
+            {overviewOn ? "✓ Full Club Overview" : "Full Club Overview"}
+          </button>
+        ) : <span />}
         <div className="flex gap-2">
           {meta.can.assignTasks && (
             <button onClick={() => setShowTaskForm(true)} className="btn-primary text-sm">+ Assign task</button>
@@ -312,10 +372,17 @@ export default function LmsBoard() {
       </div>
 
       <div className="mt-8">
-        <CalendarMonth tasks={tasks} events={events} myEmail={myEmail}
-          onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
+        {overviewOn && overview ? (
+          <ClubCalendar tasks={overview.tasks} events={overview.events}
+            onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
+        ) : (
+          <CalendarMonth tasks={tasks} events={events} myEmail={myEmail}
+            onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
+        )}
       </div>
+      {overviewOn && !overview && <p className="mt-3 text-sm text-ink/50">Loading the full club view…</p>}
 
+      {!overviewOn && (<>
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <button onClick={() => setShowPastTasks(true)} className="btn-ghost text-sm">Past tasks ({pastTaskCount})</button>
         <button onClick={() => setShowPastEvents(true)} className="btn-ghost text-sm">Past events ({pastEvents.length})</button>
@@ -398,9 +465,16 @@ export default function LmsBoard() {
           </div>
         </section>
       </div>
+      </>)}
+
+      {overviewOn && overview && (
+        <ClubOverviewLists tasks={overview.tasks} events={overview.events}
+          nameOf={nameOf} onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
+      )}
 
       {(showTaskForm || editingTask) && (
-        <TaskForm meta={meta} editing={editingTask} onClose={() => { setShowTaskForm(false); setEditingTask(null); }}
+        <TaskForm meta={meta} editing={editingTask} editGroupAssignees={editingGroupAssignees}
+          onClose={() => { setShowTaskForm(false); setEditingTask(null); }}
           onCreated={() => { setShowTaskForm(false); setEditingTask(null); load(); }} />
       )}
 
@@ -530,6 +604,10 @@ export default function LmsBoard() {
                       className="rounded-full bg-marigold px-3 py-1 text-xs font-semibold text-pine-deep">Approve</button>
                   )}
                   {r.canManage && (
+                    <button onClick={() => act(r.id, r.archived ? "unarchive" : "archive")}
+                      className="rounded-full border border-pine/20 px-2 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">{r.archived ? "Unarchive" : "Archive"}</button>
+                  )}
+                  {r.canManage && (
                     <button onClick={() => removeTask(r.id)}
                       className="rounded-full px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
                   )}
@@ -537,9 +615,15 @@ export default function LmsBoard() {
               </div>
             ))}
           </div>
-          <div className="mt-4 flex justify-end">
-            <button onClick={() => { archiveGroup(openGroupRows, true); setOpenGroupKey(null); }}
-              className="rounded-full border border-pine/20 px-4 py-2 text-xs font-medium text-pine-deep hover:bg-pine/5">Archive this task for everyone</button>
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            {openGroupRows.some((r) => r.canManage) && (
+              <button onClick={() => { setEditingTask(openGroupRows[0]); setOpenGroupKey(null); }}
+                className="rounded-full border border-pine/20 px-4 py-2 text-xs font-medium text-pine-deep hover:bg-pine/5">Edit task / assignees</button>
+            )}
+            {openGroupRows.some((r) => r.canManage) && (
+              <button onClick={() => { archiveGroup(openGroupRows, true); setOpenGroupKey(null); }}
+                className="rounded-full border border-pine/20 px-4 py-2 text-xs font-medium text-pine-deep hover:bg-pine/5">Archive for everyone</button>
+            )}
           </div>
         </Modal>
       )}
@@ -1055,7 +1139,7 @@ function MemberPicker({ members, selected, onToggle, single }: {
 }
 
 // -------------------------------------------------------------------- task form
-function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?: Task | null; onClose: () => void; onCreated: () => void }) {
+function TaskForm({ meta, editing, editGroupAssignees, onClose, onCreated }: { meta: Meta; editing?: Task | null; editGroupAssignees?: string[]; onClose: () => void; onCreated: () => void }) {
   const isEdit = !!editing;
   const [title, setTitle] = useState(editing?.title ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -1063,7 +1147,9 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
   const [requireSubmission, setRequireSubmission] = useState(editing?.requireSubmission ?? false);
   const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
-  const [assignees, setAssignees] = useState<string[]>(editing ? [editing.assigneeEmail] : []);
+  const [assignees, setAssignees] = useState<string[]>(
+    editing ? (editGroupAssignees && editGroupAssignees.length ? editGroupAssignees : [editing.assigneeEmail]) : []
+  );
   const scopes = meta.assignScopes.length ? meta.assignScopes : (["members"] as const);
   const [scope, setScope] = useState<"members" | "group" | "club">(isEdit ? "members" : scopes[0]);
   const [groups, setGroups] = useState<Group[]>(!isEdit && meta.assignableGroups.length === 1 ? meta.assignableGroups : []);
@@ -1077,11 +1163,11 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
       ? { subject: emailSubject, bodyHtml: emailBody } : null;
 
   const toggleAssignee = (email: string) =>
-    setAssignees((a) => (isEdit ? [email] : a.includes(email) ? a.filter((x) => x !== email) : [...a, email]));
+    setAssignees((a) => (a.includes(email) ? a.filter((x) => x !== email) : [...a, email]));
   const toggleGroup = (g: Group) => setGroups((x) => (x.includes(g) ? x.filter((y) => y !== g) : [...x, g]));
 
   const resolveAssignees = (): string[] => {
-    if (isEdit) return assignees.slice(0, 1);
+    if (isEdit) return assignees;
     if (scope === "club") return meta.allMembers.map((m) => m.email);
     if (scope === "group") return meta.allMembers.filter((m) => groups.includes(m.group)).map((m) => m.email);
     return assignees;
@@ -1095,11 +1181,12 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
     setBusy(true);
     try {
       if (isEdit && editing) {
+        if (assignees.length === 0) { setErr("Keep at least one person on the task."); setBusy(false); return; }
         await api(`/api/lms/tasks/${editing.id}`, {
           method: "PATCH",
           body: JSON.stringify({
-            action: "edit", title, description, dueAt: dueIso, requireSubmission,
-            requiresFile: false, tags, assigneeEmail: assignees[0] ?? editing.assigneeEmail, emailTemplate,
+            action: "editGroup", title, description, dueAt: dueIso, requireSubmission,
+            requiresFile: false, tags, assigneeEmails: assignees, emailTemplate,
           }),
         });
       } else {
@@ -1141,9 +1228,9 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
         </div>
 
         <div>
-          <label className={labelCls}>Assign to{isEdit ? " (pick one)" : ""}</label>
+          <label className={labelCls}>Assign to{isEdit ? " (add or remove anyone)" : ""}</label>
           {isEdit ? (
-            <div className="mt-1"><MemberPicker members={meta.assignableMembers} selected={assignees} onToggle={toggleAssignee} single /></div>
+            <div className="mt-1"><MemberPicker members={meta.assignableMembers} selected={assignees} onToggle={toggleAssignee} /></div>
           ) : (
             <div className="mt-1 space-y-3">
               {scopes.length > 1 && (
@@ -1319,5 +1406,177 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
         </button>
       </div>
     </Modal>
+  );
+}
+
+// ============================================================================
+//  Full Club Overview (P/VP only) — club-wide calendar + grouped lists
+// ============================================================================
+function laneOfTask(t: OTask): Lane { return t.lane; }
+
+function ClubCalendar({ tasks, events, onOpenTask, onOpenEvent }: {
+  tasks: OTask[]; events: OEvent[];
+  onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void;
+}) {
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [openDay, setOpenDay] = useState<Date | null>(null);
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const startWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+  const today = new Date();
+
+  const liveTasks = tasks.filter((t) => !t.archived);
+  const liveEvents = events.filter((e) => !e.archived);
+  const dayTasks = (date: Date) => liveTasks.filter((t) => sameDay(new Date(t.dueAt), date));
+  const dayEvents = (date: Date) => liveEvents.filter((e) => sameDay(new Date(e.startAt), date));
+
+  return (
+    <div className="rounded-3xl border border-pine/12 bg-paper p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-xl font-semibold text-pine-deep">
+          {cursor.toLocaleString(undefined, { month: "long", year: "numeric" })} · whole club
+        </h3>
+        <div className="flex gap-1">
+          <button onClick={() => setCursor(new Date(year, month - 1, 1))} className="grid h-8 w-8 place-items-center rounded-full border border-pine/15 text-pine-deep hover:bg-pine/5" aria-label="Previous month">‹</button>
+          <button onClick={() => setCursor(new Date(year, month + 1, 1))} className="grid h-8 w-8 place-items-center rounded-full border border-pine/15 text-pine-deep hover:bg-pine/5" aria-label="Next month">›</button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <div key={d}>{d}</div>)}
+      </div>
+      <div className="mt-1 grid grid-cols-7 gap-1">
+        {cells.map((date, i) => {
+          if (!date) return <div key={i} className="aspect-square rounded-lg" />;
+          const dts = dayTasks(date);
+          const des = dayEvents(date);
+          const isToday = sameDay(today, date);
+          const total = dts.length + des.length;
+          const chips = [
+            ...des.map((e) => ({ id: e.id, title: e.title, c: LANE_COLOR[e.lane] })),
+            ...dts.map((t) => ({ id: t.id, title: t.title, c: LANE_COLOR[t.lane] })),
+          ];
+          return (
+            <button key={i} type="button" onClick={() => setOpenDay(date)}
+              className={`aspect-square rounded-lg border p-1 text-left transition-colors hover:border-pine/40 ${isToday ? "border-marigold bg-marigold-soft/20" : "border-pine/8 bg-pine/[0.015]"}`}>
+              <div className={`text-[11px] font-semibold ${isToday ? "text-marigold-deep" : "text-ink/55"}`}>{date.getDate()}</div>
+              <div className="mt-0.5 space-y-0.5">
+                {chips.slice(0, 3).map((ch) => (
+                  <div key={ch.id} className="truncate rounded px-1 text-[9px] font-medium" style={{ backgroundColor: ch.c.bg, color: ch.c.fg }} title={ch.title}>{ch.title}</div>
+                ))}
+                {total > 3 && <div className="text-[9px] text-ink/40">+{total - 3} more</div>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-ink/55">
+        {LANE_ORDER.map((l) => (
+          <span key={l} className="inline-flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: LANE_COLOR[l].dot }} /> {LANE_LABEL[l]}
+          </span>
+        ))}
+      </div>
+      <p className="mt-1 text-[11px] text-ink/40">Coloured by the project group / role of whoever assigned the task or created the event.</p>
+
+      {openDay && (
+        <Modal title={openDay.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} onClose={() => setOpenDay(null)}>
+          {(() => {
+            const des = dayEvents(openDay);
+            const dts = dayTasks(openDay);
+            if (des.length + dts.length === 0) return <p className="text-sm text-ink/50">Nothing scheduled for this day.</p>;
+            return (
+              <div className="space-y-2">
+                {des.map((e) => (
+                  <button key={e.id} onClick={() => { onOpenEvent(e.id); setOpenDay(null); }} className="block w-full rounded-xl border border-pine/12 p-3 text-left hover:border-pine/30">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: LANE_COLOR[e.lane].dot }} />
+                      <span className="font-medium text-ink">{e.title}</span>
+                      <span className="ml-auto text-xs text-ink/50">Event · {e.allDay ? "all day" : fmtDateTime(e.startAt)}</span>
+                    </div>
+                  </button>
+                ))}
+                {dts.map((t) => (
+                  <button key={t.id} onClick={() => { onOpenTask(t.id); setOpenDay(null); }} className="block w-full rounded-xl border border-pine/12 p-3 text-left hover:border-pine/30">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: LANE_COLOR[t.lane].dot }} />
+                      <span className="font-medium text-ink">{t.title}</span>
+                      <span className="ml-auto text-xs text-ink/50">Task · due {fmtDateTime(t.dueAt)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function ClubOverviewLists({ tasks, events, nameOf, onOpenTask, onOpenEvent }: {
+  tasks: OTask[]; events: OEvent[]; nameOf: (e: string) => string;
+  onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void;
+}) {
+  const groups = groupByBatch(tasks);
+  return (
+    <div className="mt-10">
+      <h3 className="font-display text-2xl font-semibold text-pine-deep">Full Club Overview</h3>
+      <p className="mt-1 text-sm text-ink/55">Every task and event in the club, present and archived, grouped by project / role. You can only act on items you created yourself.</p>
+      <div className="mt-6 space-y-8">
+        {LANE_ORDER.map((lane) => {
+          const laneGroups = groups.filter((g) => laneOfTask(g.head as OTask) === lane);
+          const laneEvents = events.filter((e) => e.lane === lane);
+          if (laneGroups.length === 0 && laneEvents.length === 0) return null;
+          const c = LANE_COLOR[lane];
+          return (
+            <section key={lane}>
+              <div className="flex items-center gap-2">
+                <span className="h-3 w-3 rounded" style={{ backgroundColor: c.dot }} />
+                <h4 className="font-display text-lg font-semibold text-pine-deep">{LANE_LABEL[lane]}</h4>
+                <span className="text-xs text-ink/40">{laneGroups.length} task{laneGroups.length === 1 ? "" : "s"} · {laneEvents.length} event{laneEvents.length === 1 ? "" : "s"}</span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {laneGroups.map((g) => {
+                  const t = g.head;
+                  const done = g.rows.filter((r) => r.status === "complete").length;
+                  const archived = g.rows.every((r) => r.archived);
+                  return (
+                    <button key={g.key} onClick={() => onOpenTask(t.id)}
+                      className="rounded-xl border border-pine/12 bg-paper p-3 text-left transition-colors hover:border-pine/30">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-medium text-ink">{t.title}</span>
+                        <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: c.bg, color: c.fg }}>Task</span>
+                      </div>
+                      <p className="mt-1 text-xs text-ink/50">
+                        by {nameOf(t.assignerEmail)} · {g.rows.length === 1 ? `to ${nameOf(t.assigneeEmail)}` : `${g.rows.length} people`} · {done}/{g.rows.length} done{archived ? " · archived" : ""}
+                      </p>
+                      <p className="mt-0.5 text-xs text-ink/40">Due {fmtDateTime(t.dueAt)}</p>
+                    </button>
+                  );
+                })}
+                {laneEvents.map((e) => (
+                  <button key={e.id} onClick={() => onOpenEvent(e.id)}
+                    className="rounded-xl border border-pine/12 bg-paper p-3 text-left transition-colors hover:border-pine/30">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-ink">{e.title}</span>
+                      <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: c.bg, color: c.fg }}>Event</span>
+                    </div>
+                    <p className="mt-1 text-xs text-ink/50">by {nameOf(e.creatorEmail)}{e.archived ? " · archived" : ""}</p>
+                    <p className="mt-0.5 text-xs text-ink/40">{e.allDay ? `${fmtDateOnly(e.startAt)} · all day` : fmtDateTime(e.startAt)}</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
   );
 }

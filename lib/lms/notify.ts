@@ -151,6 +151,26 @@ export async function notifyTaskUnmarked(
   await notify(task.assigneeEmail, subject, body, "task_unmarked", task.id);
 }
 
+/** A task was deleted → email/notify the doer. */
+export async function notifyTaskDeleted(task: Task, actorEmail: string): Promise<void> {
+  const actor = nameOf(actorEmail);
+  const subject = `Task Deleted: ${task.title}`;
+  const body =
+    `Your task, "${task.title}", assigned by ${nameOf(task.assignerEmail)}, ` +
+    `has been deleted by ${actor} and removed from your Member Dashboard.`;
+  await notify(task.assigneeEmail, subject, body, "task_deleted", task.id);
+}
+
+/** A task was archived → email/notify the doer. */
+export async function notifyTaskArchived(task: Task, actorEmail: string): Promise<void> {
+  const actor = nameOf(actorEmail);
+  const subject = `Task Archived: ${task.title}`;
+  const body =
+    `Your task, "${task.title}", has been archived by ${actor} ` +
+    `and moved to your past tasks on the Member Dashboard.`;
+  await notify(task.assigneeEmail, subject, body, "task_archived", task.id);
+}
+
 /** Reminder (cron) → email/notify the doer. `phrase` like "in 3 days" / "by 2 days". */
 export async function notifyTaskReminder(
   task: Task,

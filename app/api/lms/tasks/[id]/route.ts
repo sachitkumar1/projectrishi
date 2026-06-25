@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
-import { findMember } from "@/lib/members";
+import { canSeeMember, findMember } from "@/lib/members";
 import {
   canApproveTask,
   canAssignTaskTo,
@@ -13,7 +13,9 @@ import {
   addTaskComment,
   approveTask,
   deleteTask,
+  editTaskGroup,
   getTask,
+  getTasksByGroup,
   rejectTask,
   setTaskArchived,
   submitTask,
@@ -22,6 +24,9 @@ import {
 } from "@/lib/lms/store";
 import {
   notifyTaskApproved,
+  notifyTaskArchived,
+  notifyTaskAssigned,
+  notifyTaskDeleted,
   notifyTaskRejected,
   notifyTaskSubmitted,
   notifyTaskUnmarked,
@@ -120,7 +125,55 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (body.action === "archive" || body.action === "unarchive") {
     if (!canManageTask(me, task))
       return NextResponse.json({ error: "You can't archive this task." }, { status: 403 });
-    return NextResponse.json({ task: await setTaskArchived(task.id, body.action === "archive") });
+    const updated = await setTaskArchived(task.id, body.action === "archive");
+    if (body.action === "archive" && task.assigneeEmail.toLowerCase() !== me.email.toLowerCase())
+      await notifyTaskArchived(updated, me.email).catch(() => {});
+    return NextResponse.json({ task: updated });
+  }
+
+  // ---- edit the WHOLE task group (shared fields + add/remove assignees) ----
+  if (body.action === "editGroup") {
+    if (!canManageTask(me, task))
+      return NextResponse.json({ error: "You can't edit this task." }, { status: 403 });
+
+    const title = str(body.title).trim();
+    const dueAt = str(body.dueAt);
+    if (!title) return NextResponse.json({ error: "A title is required." }, { status: 400 });
+    if (!dueAt) return NextResponse.json({ error: "A due date is required." }, { status: 400 });
+
+    const assigneeEmails = Array.isArray(body.assigneeEmails)
+      ? (body.assigneeEmails as string[]).map((e) => String(e))
+      : [];
+    if (assigneeEmails.length === 0)
+      return NextResponse.json({ error: "Keep at least one person on the task." }, { status: 400 });
+
+    // Any NEWLY-added assignee must be someone this person may assign to.
+    const existing = await getTasksByGroup(task.groupId);
+    const existingSet = new Set(existing.map((r) => r.assigneeEmail.toLowerCase()));
+    for (const email of assigneeEmails) {
+      if (existingSet.has(email.toLowerCase())) continue; // unchanged
+      const target = findMember(email);
+      if (!target || !canAssignTaskTo(me, target) || !canSeeMember(me.email, target))
+        return NextResponse.json({ error: `You can't assign to ${email}.` }, { status: 403 });
+    }
+
+    const et = body.emailTemplate as { subject?: string; bodyHtml?: string } | null | undefined;
+    const emailTemplate =
+      et && (et.subject || et.bodyHtml) ? { subject: et.subject ?? "", bodyHtml: et.bodyHtml ?? "" } : null;
+
+    const { added } = await editTaskGroup(task.groupId, task.assignerEmail, {
+      title,
+      description: str(body.description).trim(),
+      tags: Array.isArray(body.tags) ? (body.tags as string[]) : [],
+      dueAt,
+      requiresFile: Boolean(body.requiresFile),
+      requireSubmission: Boolean(body.requireSubmission),
+      emailTemplate,
+      assigneeEmails,
+    });
+    // Email any newly-added assignees just like a fresh assignment.
+    await Promise.allSettled(added.map((t) => notifyTaskAssigned(t)));
+    return NextResponse.json({ ok: true, added: added.length });
   }
 
   // ---- edit ----
@@ -171,6 +224,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
   if (!canManageTask(me, task))
     return NextResponse.json({ error: "You can't delete this task." }, { status: 403 });
+  if (task.assigneeEmail.toLowerCase() !== me.email.toLowerCase())
+    await notifyTaskDeleted(task, me.email).catch(() => {});
   await deleteTask(task.id);
   return NextResponse.json({ ok: true });
 }
