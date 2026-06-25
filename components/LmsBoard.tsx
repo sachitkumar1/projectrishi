@@ -525,12 +525,14 @@ export default function LmsBoard() {
                 <div className="flex shrink-0 gap-1">
                   <button onClick={() => { setDetailTaskId(r.id); setOpenGroupKey(null); }}
                     className="rounded-full border border-pine/20 px-3 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Open</button>
-                  {r.status === "pending" && (
+                  {r.canManage && r.status === "pending" && (
                     <button onClick={() => act(r.id, "approve")}
                       className="rounded-full bg-marigold px-3 py-1 text-xs font-semibold text-pine-deep">Approve</button>
                   )}
-                  <button onClick={() => removeTask(r.id)}
-                    className="rounded-full px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
+                  {r.canManage && (
+                    <button onClick={() => removeTask(r.id)}
+                      className="rounded-full px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
+                  )}
                 </div>
               </div>
             ))}
@@ -679,6 +681,12 @@ function TaskDetail({
 }) {
   const isAssignee = task.assigneeEmail.toLowerCase() === myEmail.toLowerCase();
   const canManage = !!task.canManage;
+  // A self-assigned task has no separate doer: the one person manages it via the
+  // manager controls below, so we never show the doer-only submission/complete UI.
+  const isSelfAssigned = isAssignee && task.assigneeEmail.toLowerCase() === task.assignerEmail.toLowerCase();
+  // The doer may submit proof of work only on a require-submission task they
+  // didn't assign themselves. They never mark complete or unmark.
+  const canDoerSubmit = isAssignee && !isSelfAssigned && task.requireSubmission;
   const [subText, setSubText] = useState(task.submissionText ?? "");
   const [subLink, setSubLink] = useState(task.submissionLink ?? "");
   const [note, setNote] = useState("");
@@ -719,11 +727,13 @@ function TaskDetail({
           )}
         </div>
 
-        {/* Submission */}
-        {(task.submissionText || task.submissionLink || isAssignee) && (
+        {/* Submission — proof of work. A doer can submit (for review) only on a
+            require-submission task they didn't assign themselves; everyone else
+            sees it read-only. */}
+        {(task.submissionText || task.submissionLink || canDoerSubmit) && (
           <div className="rounded-2xl border border-pine/12 p-4">
             <p className="text-sm font-semibold text-ink">Submission</p>
-            {isAssignee && task.status === "not_complete" ? (
+            {canDoerSubmit && task.status === "not_complete" ? (
               <div className="mt-2 space-y-2">
                 <textarea className={inputCls} rows={3} value={subText} onChange={(e) => setSubText(e.target.value)}
                   placeholder="Write a note about your work (optional unless required)…" />
@@ -731,8 +741,9 @@ function TaskDetail({
                   placeholder="Add a link (optional unless required)…" />
                 <button disabled={busy} onClick={() => run("submit", { submissionText: subText, submissionLink: subLink })}
                   className="rounded-full bg-pine px-4 py-2 text-xs font-semibold text-paper disabled:opacity-60">
-                  {busy ? "Saving…" : "Mark complete"}
+                  {busy ? "Saving…" : "Submit for review"}
                 </button>
+                <p className="text-xs text-ink/45">Your assigner reviews this and marks the task complete.</p>
               </div>
             ) : (
               <div className="mt-2 space-y-1 text-sm text-ink/75">
@@ -748,12 +759,8 @@ function TaskDetail({
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
-          {isAssignee && task.status === "complete" && (
-            <button disabled={busy} onClick={() => run("unmark")} className="rounded-full border border-pine/25 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5 disabled:opacity-60">Unmark as complete</button>
-          )}
-          {isAssignee && task.status === "pending" && (
-            <button disabled={busy} onClick={() => run("unmark")} className="rounded-full border border-pine/25 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5 disabled:opacity-60">Retract submission</button>
-          )}
+          {/* Doer keeps only the (completion-unrelated) compose-email button.
+              Marking complete / unmarking is a manager-only action below. */}
           {isAssignee && task.emailTemplate && onComposeEmail && (
             <button onClick={onComposeEmail} className="rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep">Compose email</button>
           )}

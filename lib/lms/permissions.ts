@@ -53,9 +53,30 @@ export function assignableGroups(m: Member): ProjectGroup[] {
 }
 
 // -------------------------------------------------------------- task complete
-/** The assignee marks their task done → moves it to "pending" (awaiting approval). */
+//  WHO CONTROLS COMPLETION:
+//    Only the *manager* of a task — its assigner, plus that assigner's co-leads
+//    (same project group) and co-NMT-leaders — may mark a task complete or
+//    unmark it. This holds regardless of the doer's own club roles: a P/VP who
+//    was assigned a task by someone else is just the doer, not a manager.
+//
+//    The doer (assignee) never marks their own task complete and never unmarks
+//    it. On a task that *requires a submission*, the doer may submit proof of
+//    work for review (→ "pending"); a manager then approves it to "complete".
+//    A self-assigned task has no separate doer — the one person is the manager
+//    and completes it directly through the manager controls.
+
+/** True when the assignee is also the assigner (a task someone gave themselves). */
+export function isSelfAssignedTask(task: Task): boolean {
+  return eq(task.assigneeEmail, task.assignerEmail);
+}
+
+/**
+ * The assignee submits proof of work for review → moves the task to "pending".
+ * Only allowed for a genuine doer (not self-assigned); the self-assigner uses
+ * the manager "mark complete" control instead.
+ */
 export function canSubmitTask(task: Task, actorEmail: string): boolean {
-  return eq(task.assigneeEmail, actorEmail);
+  return eq(task.assigneeEmail, actorEmail) && !isSelfAssignedTask(task);
 }
 
 /** A manager (assigner or co-lead/co-NMT) gives final approval → "complete". */
@@ -69,11 +90,11 @@ export function canRejectTask(actor: Member, task: Task): boolean {
 }
 
 /**
- * Unmark a task as complete. The doer may unmark their own task (changed their
- * mind), and any manager (creator / co-lead / co-NMT) may unmark it too.
+ * Unmark a task as complete. ONLY a manager (assigner / co-lead / co-NMT) may
+ * do this — never the doer of a task assigned to them by someone else.
  */
 export function canUnmarkTask(actor: Member, task: Task): boolean {
-  return eq(task.assigneeEmail, actor.email) || canManageTask(actor, task);
+  return canManageTask(actor, task);
 }
 
 // --------------------------------------------------------------- event create
