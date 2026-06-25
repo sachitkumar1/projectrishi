@@ -8,6 +8,7 @@ import Contours from "@/components/Contours";
 import LmsBoard from "@/components/LmsBoard";
 import Avatar from "@/components/Avatar";
 import SettingsGear from "@/components/SettingsGear";
+import NotificationBell from "@/components/NotificationBell";
 import AnnouncementsPanel from "@/components/AnnouncementsPanel";
 import NewsletterPanel from "@/components/NewsletterPanel";
 import CreateMenu from "@/components/CreateMenu";
@@ -41,7 +42,10 @@ export default function DashboardPage() {
                 <span className="h-1.5 w-1.5 rounded-full bg-marigold" />
                 Member Dashboard
               </span>
-              <SettingsGear />
+              <div className="flex items-center gap-2">
+                <NotificationBell />
+                <SettingsGear />
+              </div>
             </div>
             <div className="mt-5 flex items-center gap-5">
               <Avatar src={avatar} name={fullName || firstName} size={72} className="ring-2 ring-paper/30" />

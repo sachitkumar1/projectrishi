@@ -1,0 +1,234 @@
+// ============================================================================
+//  Notify — task/event emails + in-dashboard notifications
+// ----------------------------------------------------------------------------
+//  One place that owns every templated message in the spec. Each call sends an
+//  email FROM the club account (ucberkeley@projectrishi.org) AND writes a
+//  matching notification (title = subject, body = body) so the dashboard bell
+//  shows it too. Everything here is best-effort: a delivery failure is logged
+//  but never breaks the task/event action that triggered it.
+// ============================================================================
+
+import { findMember, memberFullName, MEMBERS, type Member } from "@/lib/members";
+import {
+  getGmailConnection,
+  sendViaConnection,
+  SHARED_SENDER,
+  SHARED_FROM_NAME,
+} from "@/lib/lms/gmail";
+import { addNotification } from "@/lib/lms/notifications";
+import type { ClubEvent, Task } from "@/lib/lms/types";
+import { PROJECT_GROUP_LABELS } from "@/lib/lms/types";
+
+const nameOf = (email: string) => {
+  const m = findMember(email);
+  return m ? memberFullName(m) : email;
+};
+
+const esc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const htmlFromText = (text: string) =>
+  `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1B2620">${esc(
+    text,
+  ).replace(/\n/g, "<br>")}</div>`;
+
+const fmtDue = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+/**
+ * Email one recipient from the club account AND drop a notification in their
+ * dashboard. Both are best-effort and independent — if email fails, the
+ * notification still lands, and vice-versa.
+ */
+async function notify(
+  recipientEmail: string,
+  subject: string,
+  body: string,
+  kind: string,
+  refId: string | null,
+): Promise<void> {
+  // In-dashboard notification (also drives the browser notification).
+  try {
+    await addNotification({ userEmail: recipientEmail, title: subject, body, kind, refId });
+  } catch (e) {
+    console.error("notify: notification write failed", (e as Error).message);
+  }
+  // Email from the shared club account.
+  try {
+    const conn = await getGmailConnection(SHARED_SENDER);
+    if (!conn) return; // club Gmail not connected yet — notification still delivered
+    const fromEmail = conn.connectedGoogleEmail ?? conn.accountEmail;
+    await sendViaConnection(conn, {
+      fromEmail,
+      fromName: SHARED_FROM_NAME,
+      to: [recipientEmail],
+      subject,
+      html: htmlFromText(body),
+    });
+  } catch (e) {
+    console.error("notify: email send failed", (e as Error).message);
+  }
+}
+
+// Append a free-text note (a comment) to a body, if one was given.
+const withNote = (body: string, note?: string | null) =>
+  note && note.trim() ? `${body}\n\nNote: ${note.trim()}` : body;
+
+// ---------------------------------------------------------------- TASK EMAILS
+
+/** A task was assigned → email/notify the assignee. */
+export async function notifyTaskAssigned(task: Task): Promise<void> {
+  const assigner = nameOf(task.assignerEmail);
+  const subject = `Task Assigned: ${task.title}`;
+  const body =
+    `${assigner} has assigned you a new task: ${task.title}. ` +
+    `Please complete it and mark it as done on your Member Dashboard by ${fmtDue(task.dueAt)}.\n\n` +
+    `Task Description: ${task.description || "(none)"}`;
+  await notify(task.assigneeEmail, subject, body, "task_assigned", task.id);
+}
+
+/** The doer marked it done → email/notify the assigner (pending their approval). */
+export async function notifyTaskSubmitted(task: Task, note?: string | null): Promise<void> {
+  const doer = nameOf(task.assigneeEmail);
+  const subject = `${doer} Requests Approval for ${task.title}`;
+  const body = withNote(
+    `${doer} has marked the task "${task.title}" as complete. It is now pending your approval.`,
+    note,
+  );
+  await notify(task.assignerEmail, subject, body, "task_submitted", task.id);
+}
+
+/** Completion approved → email/notify the doer. */
+export async function notifyTaskApproved(task: Task, approverEmail: string): Promise<void> {
+  const approver = nameOf(approverEmail);
+  const subject = `${approver} has Approved Completion of "${task.title}"`;
+  const body = `Congrats! ${approver} has approved the completion of "${task.title}".`;
+  await notify(task.assigneeEmail, subject, body, "task_approved", task.id);
+}
+
+/** Completion rejected → email/notify the doer. */
+export async function notifyTaskRejected(
+  task: Task,
+  rejecterEmail: string,
+  note?: string | null,
+): Promise<void> {
+  const rejecter = nameOf(rejecterEmail);
+  const subject = `${rejecter} has Rejected Completion of "${task.title}"`;
+  const body = withNote(
+    `${rejecter} has rejected the completion of "${task.title}". Please revisit.`,
+    note,
+  );
+  await notify(task.assigneeEmail, subject, body, "task_rejected", task.id);
+}
+
+/** A completed task was unmarked by the creator → email/notify the doer. */
+export async function notifyTaskUnmarked(
+  task: Task,
+  unmarkerEmail: string,
+  note?: string | null,
+): Promise<void> {
+  const unmarker = nameOf(unmarkerEmail);
+  const subject = `${task.title} has been Unmarked as Complete`;
+  const body = withNote(
+    `Your task, "${task.title}" has been unmarked as complete by ${unmarker}. Please revisit.`,
+    note,
+  );
+  await notify(task.assigneeEmail, subject, body, "task_unmarked", task.id);
+}
+
+/** Reminder (cron) → email/notify the doer. `phrase` like "in 3 days" / "by 2 days". */
+export async function notifyTaskReminder(
+  task: Task,
+  state: "due" | "past due",
+  phrase: string,
+): Promise<void> {
+  const subject = `Task Reminder: ${task.title} is ${state} ${phrase}`;
+  const body = `${task.title} is ${state} ${phrase}. Please complete as soon as possible and submit for approval.`;
+  await notify(task.assigneeEmail, subject, body, "task_reminder", task.id);
+}
+
+// --------------------------------------------------------------- EVENT EMAILS
+//  Events have an audience rather than a single assignee, so we resolve the
+//  member emails the event targets and notify each of them.
+
+function eventAudience(event: ClubEvent): string[] {
+  const set = new Set<string>();
+  const add = (e: string) => set.add(e.toLowerCase());
+  switch (event.scopeKind) {
+    case "club":
+      MEMBERS.forEach((m) => add(m.email));
+      break;
+    case "group":
+      MEMBERS.filter((m) => event.scopeGroups.includes(m.group)).forEach((m) => add(m.email));
+      break;
+    case "all_newbies":
+      MEMBERS.filter((m) => m.roles.newbie).forEach((m) => add(m.email));
+      break;
+    case "members":
+      event.scopeEmails.forEach(add);
+      break;
+  }
+  add(event.creatorEmail); // the creator always hears about their own event
+  return Array.from(set);
+}
+
+function eventWhen(event: ClubEvent): string {
+  if (event.allDay) {
+    const d = new Date(event.startAt).toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    return `${d} (all day)`;
+  }
+  const start = fmtDue(event.startAt);
+  return event.endAt ? `${start} – ${fmtDue(event.endAt)}` : start;
+}
+
+function eventAudienceLabel(event: ClubEvent): string {
+  switch (event.scopeKind) {
+    case "club":
+      return "the whole club";
+    case "all_newbies":
+      return "all newbies";
+    case "group":
+      return event.scopeGroups.map((g) => PROJECT_GROUP_LABELS[g]).join(", ");
+    case "members":
+      return `${event.scopeEmails.length} member(s)`;
+  }
+}
+
+/** An event was created → email/notify everyone in its audience. */
+export async function notifyEventCreated(event: ClubEvent): Promise<void> {
+  const creator = nameOf(event.creatorEmail);
+  const subject = `New Event: ${event.title}`;
+  const body =
+    `${creator} created a new event: ${event.title} — ${eventWhen(event)} ` +
+    `(for ${eventAudienceLabel(event)}).` +
+    (event.description ? `\n\nDetails: ${event.description}` : "");
+  await Promise.all(
+    eventAudience(event).map((email) => notify(email, subject, body, "event_created", event.id)),
+  );
+}
+
+/** An event was removed → email/notify everyone in its audience. */
+export async function notifyEventRemoved(event: ClubEvent): Promise<void> {
+  const creator = nameOf(event.creatorEmail);
+  const subject = `Event Canceled: ${event.title}`;
+  const body = `${creator} canceled the event "${event.title}" (was ${eventWhen(event)}).`;
+  await Promise.all(
+    eventAudience(event).map((email) => notify(email, subject, body, "event_removed", event.id)),
+  );
+}
+
+// Re-export for callers that want the audience (e.g. reminder/debug tooling).
+export { eventAudience };
+export type { Member };

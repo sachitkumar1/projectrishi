@@ -3,6 +3,7 @@ import { getCurrentMember } from "@/lib/lms/currentUser";
 import { canSeeMember, findMember, MEMBERS } from "@/lib/members";
 import { canAssignTasks, canAssignTaskTo, canManageTask } from "@/lib/lms/permissions";
 import { createTasks, listTasksForMember } from "@/lib/lms/store";
+import { notifyTaskAssigned } from "@/lib/lms/notify";
 import type { NewTaskInput, Task } from "@/lib/lms/types";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ function autoCc(t: Task): string[] {
 export async function GET() {
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
-  const tasks = await listTasksForMember(me.email);
+  const tasks = await listTasksForMember(me);
   const withFlags = tasks.map((t) => ({
     ...t,
     canManage: canManageTask(me, t),
@@ -51,15 +52,10 @@ export async function POST(req: Request) {
   if (assigneeEmails.length === 0)
     return NextResponse.json({ error: "Pick at least one person." }, { status: 400 });
 
-  // Enforce: every assignee must be someone this person is allowed to assign to
-  // (and allowed to see — hidden test accounts are off-limits to others).
   for (const email of assigneeEmails) {
     const target = findMember(email);
     if (!target || !canAssignTaskTo(me, target) || !canSeeMember(me.email, target)) {
-      return NextResponse.json(
-        { error: `You can't assign tasks to ${email}.` },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: `You can't assign tasks to ${email}.` }, { status: 403 });
     }
   }
 
@@ -70,12 +66,18 @@ export async function POST(req: Request) {
       tags: Array.isArray(body.tags) ? body.tags : [],
       dueAt: body.dueAt,
       requiresFile: Boolean(body.requiresFile),
-      emailTemplate: body.emailTemplate && (body.emailTemplate.subject || body.emailTemplate.bodyHtml)
-        ? { subject: body.emailTemplate.subject ?? "", bodyHtml: body.emailTemplate.bodyHtml ?? "" }
-        : null,
+      requireSubmission: Boolean(body.requireSubmission),
+      emailTemplate:
+        body.emailTemplate && (body.emailTemplate.subject || body.emailTemplate.bodyHtml)
+          ? { subject: body.emailTemplate.subject ?? "", bodyHtml: body.emailTemplate.bodyHtml ?? "" }
+          : null,
       assigneeEmails,
     },
     me.email
   );
+
+  // Email + notify each assignee that a task was created for them (best-effort).
+  await Promise.allSettled(created.map((t) => notifyTaskAssigned(t)));
+
   return NextResponse.json({ tasks: created }, { status: 201 });
 }

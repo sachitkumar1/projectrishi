@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Avatar from "@/components/Avatar";
 import RichTextEditor from "@/components/editor/RichTextEditor";
-import MessageComposer, { type ComposerPrefill } from "@/components/MessageComposer";
+import MessageComposer from "@/components/MessageComposer";
 
 // ----- types mirrored from the API JSON -----
 type Group = "E" | "R" | "W" | "H";
@@ -30,16 +30,20 @@ type Meta = {
   allMembers: Lite[];
 };
 type EmailTemplate = { subject: string; bodyHtml: string };
+type HistoryAction = "created" | "submitted" | "approved" | "rejected" | "unmarked" | "edited";
+type HistoryEntry = { id: string; action: HistoryAction; actorEmail: string; at: string; note?: string };
+type Comment = { id: string; authorEmail: string; body: string; at: string; parentId: string | null };
 type Task = {
   id: string; groupId: string; title: string; description: string; tags: string[];
-  dueAt: string; requiresFile: boolean; assignerEmail: string;
+  dueAt: string; requiresFile: boolean; requireSubmission: boolean; assignerEmail: string;
   assigneeEmail: string; status: "not_complete" | "pending" | "complete";
-  submittedAt: string | null; archived: boolean; createdAt: string; canManage?: boolean;
-  emailTemplate?: EmailTemplate | null; ccEmails?: string[];
+  submittedAt: string | null; submissionText: string | null; submissionLink: string | null;
+  history: HistoryEntry[]; comments: Comment[]; archived: boolean; createdAt: string;
+  canManage?: boolean; emailTemplate?: EmailTemplate | null; ccEmails?: string[];
 };
 type ClubEvent = {
   id: string; title: string; description: string; startAt: string;
-  endAt: string | null; creatorEmail: string;
+  endAt: string | null; allDay: boolean; creatorEmail: string;
   scopeKind: "members" | "group" | "club" | "all_newbies";
   scopeEmails: string[]; scopeGroups: Group[]; archived: boolean; createdAt: string; canManage?: boolean;
 };
@@ -51,8 +55,16 @@ const SCOPE_LABEL: Record<Meta["eventScopes"][number], string> = {
   all_newbies: "All newbies",
 };
 
-// Group task copies that were created together (same groupId) so a task
-// assigned to several people shows as one card.
+const HISTORY_LABEL: Record<HistoryAction, string> = {
+  created: "Created",
+  submitted: "Marked done by doer",
+  approved: "Approved as complete",
+  rejected: "Completion rejected",
+  unmarked: "Unmarked as complete",
+  edited: "Edited",
+};
+
+// Group task copies that were created together (same groupId).
 type TaskGroup = { key: string; rows: Task[]; head: Task };
 function groupByBatch(rows: Task[]): TaskGroup[] {
   const m = new Map<string, Task[]>();
@@ -64,23 +76,25 @@ function groupByBatch(rows: Task[]): TaskGroup[] {
   return Array.from(m.entries()).map(([key, r]) => ({ key, rows: r, head: r[0] }));
 }
 
-const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 const fmtDateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, {
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
-// ISO -> value for <input type="datetime-local"> (local time, no seconds)
+const fmtDateOnly = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const toLocalInput = (iso: string) => {
   const d = new Date(iso);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+const toDateInput = (iso: string) => {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-// Calendar color coding: events (sage), tasks assigned TO me (marigold),
-// tasks assigned BY me to someone else (blue). Self-assigned counts as TO.
 const CAL_EVENT = { bg: "rgba(91,124,106,0.30)", fg: "#143628" };
 const CAL_TO = { bg: "rgba(226,160,47,0.40)", fg: "#5c3d00" };
 const CAL_BY = { bg: "rgba(70,107,176,0.28)", fg: "#1c3559" };
@@ -108,13 +122,14 @@ export default function LmsBoard() {
   const [showPastTasks, setShowPastTasks] = useState(false);
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [detailEventId, setDetailEventId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [calConnected, setCalConnected] = useState(false);
   const calConnectedRef = useRef(false);
   useEffect(() => { calConnectedRef.current = calConnected; }, [calConnected]);
 
-  // Silent push to Google Calendar (used by auto-sync and the manual path).
   const runSync = useCallback(async (announce: boolean) => {
     setSyncing(true);
     if (announce) setSyncMsg(null);
@@ -142,8 +157,6 @@ export default function LmsBoard() {
         api("/api/lms/events"),
       ]);
       setMeta(m); setTasks(t.tasks); setEvents(e.events); setError(null);
-      // If connected to Google Calendar, push the refreshed items right away so
-      // newly added/edited/removed tasks and events sync immediately.
       if (calConnectedRef.current) runSync(false);
     } catch (err) {
       setError((err as Error).message);
@@ -154,8 +167,6 @@ export default function LmsBoard() {
 
   useEffect(() => { load(); }, [load]);
 
-  // On first render: learn whether the calendar is connected, handle the
-  // ?calendar= redirect result, and auto-sync if connected.
   useEffect(() => {
     (async () => {
       const params = new URLSearchParams(window.location.search);
@@ -169,7 +180,7 @@ export default function LmsBoard() {
         setCalConnected(s.connected);
         if (s.connected || flag === "connected") {
           setCalConnected(true);
-          await runSync(flag === "connected"); // announce right after connecting
+          await runSync(flag === "connected");
         }
       } catch { /* not signed in / no status */ }
     })();
@@ -189,13 +200,10 @@ export default function LmsBoard() {
     () => tasks.filter((t) => t.assigneeEmail.toLowerCase() === myEmail.toLowerCase()),
     [tasks, myEmail]
   );
-  // Active = not complete and not archived.
   const activeToMe = useMemo(
     () => assignedToMe.filter((t) => t.status !== "complete" && !t.archived),
     [assignedToMe]
   );
-  // Tasks I assigned to OTHER people, grouped so a single task assigned to many
-  // people is one card. A group is active while any copy is still open.
   const activeByMeGroups = useMemo(() => {
     const rows = tasks.filter(
       (t) => t.assignerEmail.toLowerCase() === myEmail.toLowerCase()
@@ -203,7 +211,14 @@ export default function LmsBoard() {
     );
     return groupByBatch(rows).filter((g) => g.rows.some((r) => r.status !== "complete" && !r.archived));
   }, [tasks, myEmail]);
-  // Past tasks: any task I'm involved in where every copy is complete or archived.
+  // Tasks assigned by my CO-LEADS / CO-NMT to other people (visible via shared control).
+  const coLeadGroups = useMemo(() => {
+    const rows = tasks.filter(
+      (t) => t.assignerEmail.toLowerCase() !== myEmail.toLowerCase()
+        && t.assigneeEmail.toLowerCase() !== myEmail.toLowerCase()
+    );
+    return groupByBatch(rows).filter((g) => g.rows.some((r) => r.status !== "complete" && !r.archived));
+  }, [tasks, myEmail]);
   const pastTaskGroups = useMemo(
     () => groupByBatch(tasks)
       .filter((g) => g.rows.every((r) => r.status === "complete" || r.archived))
@@ -219,19 +234,23 @@ export default function LmsBoard() {
     return { upcomingEvents: up, pastEvents: pa };
   }, [events]);
 
-  // Rows for the currently-open multi-assignee group (recomputed from fresh data).
   const openGroupRows = useMemo(
     () => (openGroupKey ? tasks.filter((t) => (t.groupId || t.id) === openGroupKey) : []),
     [tasks, openGroupKey]
   );
+  const detailTask = useMemo(() => tasks.find((t) => t.id === detailTaskId) ?? null, [tasks, detailTaskId]);
+  const detailEvent = useMemo(() => events.find((e) => e.id === detailEventId) ?? null, [events, detailEventId]);
 
-  async function act(taskId: string, action: "submit" | "approve" | "archive" | "unarchive") {
-    try {
-      await api(`/api/lms/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ action }) });
-      await load();
-    } catch (err) { alert((err as Error).message); }
+  // ---- task actions ----
+  const callTask = useCallback(async (taskId: string, body: Record<string, unknown>) => {
+    await api(`/api/lms/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(body) });
+    await load();
+  }, [load]);
+
+  async function act(taskId: string, action: string, extra?: Record<string, unknown>) {
+    try { await callTask(taskId, { action, ...(extra ?? {}) }); }
+    catch (err) { alert((err as Error).message); }
   }
-
   async function archiveGroup(rows: Task[], archived: boolean) {
     try {
       await Promise.all(rows.map((r) =>
@@ -240,36 +259,25 @@ export default function LmsBoard() {
       await load();
     } catch (err) { alert((err as Error).message); }
   }
-
   async function archiveEvent(eventId: string, archived: boolean) {
     try {
       await api(`/api/lms/events/${eventId}`, { method: "PATCH", body: JSON.stringify({ action: archived ? "archive" : "unarchive" }) });
       await load();
     } catch (err) { alert((err as Error).message); }
   }
-
   async function removeTask(taskId: string) {
     if (!confirm("Delete this task? This can't be undone.")) return;
-    try {
-      await api(`/api/lms/tasks/${taskId}`, { method: "DELETE" });
-      await load();
-    } catch (err) { alert((err as Error).message); }
+    try { await api(`/api/lms/tasks/${taskId}`, { method: "DELETE" }); await load(); setDetailTaskId(null); }
+    catch (err) { alert((err as Error).message); }
   }
-
   async function removeEvent(eventId: string) {
     if (!confirm("Delete this event? This can't be undone.")) return;
-    try {
-      await api(`/api/lms/events/${eventId}`, { method: "DELETE" });
-      await load();
-    } catch (err) { alert((err as Error).message); }
+    try { await api(`/api/lms/events/${eventId}`, { method: "DELETE" }); await load(); setDetailEventId(null); }
+    catch (err) { alert((err as Error).message); }
   }
 
-  async function syncGoogleCalendar() {
-    await runSync(true);
-  }
-  function connectGoogleCalendar() {
-    window.location.href = "/api/lms/gcal/connect";
-  }
+  async function syncGoogleCalendar() { await runSync(true); }
+  function connectGoogleCalendar() { window.location.href = "/api/lms/gcal/connect"; }
   async function unsyncGoogleCalendar() {
     if (!confirm("Stop syncing and remove the synced items from your Google Calendar?")) return;
     setSyncing(true); setSyncMsg(null);
@@ -277,9 +285,8 @@ export default function LmsBoard() {
       await api("/api/lms/gcal/disconnect", { method: "POST" });
       setCalConnected(false);
       setSyncMsg("Disconnected. Your Google Calendar will no longer update.");
-    } catch {
-      setSyncMsg("Couldn't disconnect — please try again.");
-    } finally { setSyncing(false); }
+    } catch { setSyncMsg("Couldn't disconnect — please try again."); }
+    finally { setSyncing(false); }
   }
 
   if (loading) return <p className="text-sm text-ink/50">Loading your dashboard…</p>;
@@ -293,7 +300,6 @@ export default function LmsBoard() {
 
   return (
     <div>
-      {/* actions */}
       <div className="flex flex-wrap items-center justify-end gap-4">
         <div className="flex gap-2">
           {meta.can.assignTasks && (
@@ -305,19 +311,14 @@ export default function LmsBoard() {
         </div>
       </div>
 
-      {/* calendar */}
       <div className="mt-8">
-        <CalendarMonth tasks={tasks} events={events} myEmail={myEmail} />
+        <CalendarMonth tasks={tasks} events={events} myEmail={myEmail}
+          onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
       </div>
 
-      {/* archives + calendar sync */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <button onClick={() => setShowPastTasks(true)} className="btn-ghost text-sm">
-          Past tasks ({pastTaskCount})
-        </button>
-        <button onClick={() => setShowPastEvents(true)} className="btn-ghost text-sm">
-          Past events ({pastEvents.length})
-        </button>
+        <button onClick={() => setShowPastTasks(true)} className="btn-ghost text-sm">Past tasks ({pastTaskCount})</button>
+        <button onClick={() => setShowPastEvents(true)} className="btn-ghost text-sm">Past events ({pastEvents.length})</button>
         {calConnected ? (
           <>
             <button onClick={syncGoogleCalendar} disabled={syncing} className="btn-ghost text-sm disabled:opacity-60">
@@ -328,25 +329,19 @@ export default function LmsBoard() {
             </button>
           </>
         ) : (
-          <button onClick={connectGoogleCalendar} className="btn-accent text-sm">
-            Connect Google Calendar
-          </button>
+          <button onClick={connectGoogleCalendar} className="btn-accent text-sm">Connect Google Calendar</button>
         )}
       </div>
       {syncMsg && <p className="mt-2 text-sm text-ink/60">{syncMsg}</p>}
 
-      {/* lists */}
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <section>
           <h3 className="font-display text-xl font-semibold text-pine-deep">My tasks</h3>
           <div className="mt-4 space-y-3">
             {activeToMe.length === 0 && <Empty>No active tasks assigned to you. Nice.</Empty>}
             {activeToMe.map((t) => (
-              <TaskRow key={t.id} task={t} role="assignee"
-                onSubmit={() => act(t.id, "submit")}
-                onComposeEmail={() => setComposeTask(t)}
-                onEdit={() => setEditingTask(t)} onDelete={() => removeTask(t.id)}
-                onArchive={() => act(t.id, "archive")} />
+              <TaskRow key={t.id} task={t} role="assignee" onOpen={() => setDetailTaskId(t.id)}
+                onComposeEmail={() => setComposeTask(t)} />
             ))}
           </div>
 
@@ -356,13 +351,36 @@ export default function LmsBoard() {
               <div className="mt-4 space-y-3">
                 {activeByMeGroups.map((g) =>
                   g.rows.length === 1 ? (
-                    <TaskRow key={g.key} task={g.rows[0]} role="assigner" assigneeName={nameOf(g.rows[0].assigneeEmail)} assigneeAvatar={avatarOf(g.rows[0].assigneeEmail)}
-                      onApprove={() => act(g.rows[0].id, "approve")}
-                      onEdit={() => setEditingTask(g.rows[0])} onDelete={() => removeTask(g.rows[0].id)}
-                      onArchive={() => act(g.rows[0].id, "archive")} />
+                    <TaskRow key={g.key} task={g.rows[0]} role="assigner"
+                      assigneeName={nameOf(g.rows[0].assigneeEmail)} assigneeAvatar={avatarOf(g.rows[0].assigneeEmail)}
+                      onOpen={() => setDetailTaskId(g.rows[0].id)} />
                   ) : (
                     <GroupCard key={g.key} group={g} onOpen={() => setOpenGroupKey(g.key)}
                       onArchive={() => archiveGroup(g.rows, true)} />
+                  )
+                )}
+              </div>
+            </>
+          )}
+
+          {coLeadGroups.length > 0 && (
+            <>
+              <h3 className="mt-8 font-display text-xl font-semibold text-pine-deep">
+                Assigned by my co-leads
+              </h3>
+              <p className="mt-1 text-xs text-ink/50">
+                Tasks assigned by the other lead(s) of your project group or your co-NMT leaders. You have full control over these.
+              </p>
+              <div className="mt-4 space-y-3">
+                {coLeadGroups.map((g) =>
+                  g.rows.length === 1 ? (
+                    <TaskRow key={g.key} task={g.rows[0]} role="assigner"
+                      assigneeName={nameOf(g.rows[0].assigneeEmail)} assigneeAvatar={avatarOf(g.rows[0].assigneeEmail)}
+                      byline={`by ${nameOf(g.rows[0].assignerEmail)}`}
+                      onOpen={() => setDetailTaskId(g.rows[0].id)} />
+                  ) : (
+                    <GroupCard key={g.key} group={g} byline={`by ${nameOf(g.head.assignerEmail)}`}
+                      onOpen={() => setOpenGroupKey(g.key)} onArchive={() => archiveGroup(g.rows, true)} />
                   )
                 )}
               </div>
@@ -375,30 +393,7 @@ export default function LmsBoard() {
           <div className="mt-4 space-y-3">
             {upcomingEvents.length === 0 && <Empty>No upcoming events.</Empty>}
             {upcomingEvents.map((e) => (
-              <div key={e.id} className="rounded-2xl border border-pine/12 bg-paper p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="font-semibold text-ink">{e.title}</p>
-                  <span className="shrink-0 rounded-full bg-sage/15 px-2.5 py-1 text-xs font-medium text-pine-deep">
-                    {fmtDateTime(e.startAt)}
-                  </span>
-                </div>
-                {e.description && <p className="mt-1 text-sm text-ink/70">{e.description}</p>}
-                <div className="mt-2 flex items-center justify-between gap-2">
-                  <p className="text-xs text-ink/45">
-                    {e.scopeKind === "club" && "Whole club"}
-                    {e.scopeKind === "all_newbies" && "All newbies"}
-                    {e.scopeKind === "group" && `Groups: ${e.scopeGroups.map((g) => GROUP_LABEL[g]).join(", ")}`}
-                    {e.scopeKind === "members" && `${e.scopeEmails.length} member(s)`}
-                  </p>
-                  {e.canManage && (
-                    <div className="flex gap-1">
-                      <button onClick={() => setEditingEvent(e)} className="rounded-full px-2 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Edit</button>
-                      <button onClick={() => archiveEvent(e.id, true)} className="rounded-full px-2 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Archive</button>
-                      <button onClick={() => removeEvent(e.id)} className="rounded-full px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <EventRow key={e.id} event={e} onOpen={() => setDetailEventId(e.id)} />
             ))}
           </div>
         </section>
@@ -426,6 +421,23 @@ export default function LmsBoard() {
           onCreated={() => { setShowEventForm(false); setEditingEvent(null); load(); }} />
       )}
 
+      {detailTask && (
+        <TaskDetail task={detailTask} myEmail={myEmail} nameOf={nameOf} avatarOf={avatarOf}
+          onClose={() => setDetailTaskId(null)}
+          onAction={(action, extra) => act(detailTask.id, action, extra)}
+          onEdit={() => { setEditingTask(detailTask); setDetailTaskId(null); }}
+          onDelete={() => removeTask(detailTask.id)}
+          onComposeEmail={detailTask.emailTemplate ? () => setComposeTask(detailTask) : undefined} />
+      )}
+
+      {detailEvent && (
+        <EventDetail event={detailEvent} nameOf={nameOf}
+          onClose={() => setDetailEventId(null)}
+          onEdit={detailEvent.canManage ? () => { setEditingEvent(detailEvent); setDetailEventId(null); } : undefined}
+          onArchive={detailEvent.canManage ? () => { archiveEvent(detailEvent.id, !detailEvent.archived); setDetailEventId(null); } : undefined}
+          onDelete={detailEvent.canManage ? () => removeEvent(detailEvent.id) : undefined} />
+      )}
+
       {showPastTasks && (
         <Modal title="Past tasks" onClose={() => setShowPastTasks(false)}>
           {pastTaskGroups.length === 0 ? (
@@ -441,7 +453,8 @@ export default function LmsBoard() {
                 return (
                   <div key={g.key} className="rounded-xl border border-pine/12 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-ink">{t.title}</span>
+                      <button onClick={() => { if (!multi) { setDetailTaskId(t.id); setShowPastTasks(false); } else { setOpenGroupKey(g.key); setShowPastTasks(false); } }}
+                        className="text-left font-medium text-ink hover:underline">{t.title}</button>
                       <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
                         style={{ backgroundColor: anyArchived ? "rgba(27,38,32,0.08)" : CAL_TO.bg, color: anyArchived ? "#1B2620" : CAL_TO.fg }}>
                         {anyArchived ? "Archived" : "Complete"}
@@ -452,16 +465,10 @@ export default function LmsBoard() {
                         ? `Assigned to ${g.rows.length} people · ${doneCount} complete`
                         : <>Due {fmtDateTime(t.dueAt)}{t.submittedAt && <span className={late ? "font-semibold text-red-600" : ""}> · Completed {fmtDateTime(t.submittedAt)}{late ? " (late)" : ""}</span>}</>}
                     </p>
-                    {g.rows.some((r) => r.canManage) && (
+                    {g.rows.some((r) => r.canManage) && anyArchived && (
                       <div className="mt-2 flex gap-2">
-                        {multi && (
-                          <button onClick={() => { setOpenGroupKey(g.key); setShowPastTasks(false); }}
-                            className="rounded-full border border-pine/20 px-3 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">View people</button>
-                        )}
-                        {anyArchived && (
-                          <button onClick={() => archiveGroup(g.rows.filter((r) => r.archived), false)}
-                            className="rounded-full border border-pine/20 px-3 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Unarchive</button>
-                        )}
+                        <button onClick={() => archiveGroup(g.rows.filter((r) => r.archived), false)}
+                          className="rounded-full border border-pine/20 px-3 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Unarchive</button>
                       </div>
                     )}
                   </div>
@@ -480,9 +487,10 @@ export default function LmsBoard() {
               {pastEvents.map((e) => (
                 <div key={e.id} className="rounded-xl border border-pine/12 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-ink">{e.title}</span>
+                    <button onClick={() => { setDetailEventId(e.id); setShowPastEvents(false); }}
+                      className="text-left font-medium text-ink hover:underline">{e.title}</button>
                     <span className="shrink-0 text-xs text-ink/50">
-                      {e.archived ? "Archived · " : ""}{fmtDateTime(e.startAt)}
+                      {e.archived ? "Archived · " : ""}{e.allDay ? fmtDateOnly(e.startAt) : fmtDateTime(e.startAt)}
                     </span>
                   </div>
                   {e.description && <p className="mt-1 text-xs text-ink/60">{e.description}</p>}
@@ -515,9 +523,11 @@ export default function LmsBoard() {
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
-                  {r.status !== "complete" && (
+                  <button onClick={() => { setDetailTaskId(r.id); setOpenGroupKey(null); }}
+                    className="rounded-full border border-pine/20 px-3 py-1 text-xs font-medium text-pine-deep hover:bg-pine/5">Open</button>
+                  {r.status === "pending" && (
                     <button onClick={() => act(r.id, "approve")}
-                      className="rounded-full bg-marigold px-3 py-1 text-xs font-semibold text-pine-deep">Mark complete</button>
+                      className="rounded-full bg-marigold px-3 py-1 text-xs font-semibold text-pine-deep">Approve</button>
                   )}
                   <button onClick={() => removeTask(r.id)}
                     className="rounded-full px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
@@ -526,7 +536,7 @@ export default function LmsBoard() {
             ))}
           </div>
           <div className="mt-4 flex justify-end">
-            <button onClick={() => archiveGroup(openGroupRows, true)}
+            <button onClick={() => { archiveGroup(openGroupRows, true); setOpenGroupKey(null); }}
               className="rounded-full border border-pine/20 px-4 py-2 text-xs font-medium text-pine-deep hover:bg-pine/5">Archive this task for everyone</button>
           </div>
         </Modal>
@@ -540,94 +550,100 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 // --------------------------------------------------------------------- task row
+function statusChipFor(status: Task["status"]) {
+  if (status === "complete")
+    return <span className="rounded-full bg-pine px-2.5 py-1 text-xs font-semibold text-paper">Complete</span>;
+  if (status === "pending")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-marigold-soft px-2.5 py-1 text-xs font-semibold text-marigold-deep">
+        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+        Pending
+      </span>
+    );
+  return <span className="rounded-full border border-ink/15 px-2.5 py-1 text-xs font-medium text-ink/55">Not yet complete</span>;
+}
+
 function TaskRow({
-  task, role, assigneeName, assigneeAvatar, onSubmit, onApprove, onEdit, onDelete, onArchive, onComposeEmail,
+  task, role, assigneeName, assigneeAvatar, byline, onOpen, onComposeEmail,
 }: {
   task: Task; role: "assignee" | "assigner"; assigneeName?: string; assigneeAvatar?: string | null;
-  onSubmit?: () => void; onApprove?: () => void; onEdit?: () => void; onDelete?: () => void; onArchive?: () => void;
-  onComposeEmail?: () => void;
+  byline?: string; onOpen: () => void; onComposeEmail?: () => void;
 }) {
   const overdue = task.submittedAt
     ? new Date(task.submittedAt) > new Date(task.dueAt)
     : new Date() > new Date(task.dueAt) && task.status !== "complete";
 
-  const statusChip =
-    task.status === "complete" ? (
-      <span className="rounded-full bg-pine px-2.5 py-1 text-xs font-semibold text-paper">Complete</span>
-    ) : task.status === "pending" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-marigold-soft px-2.5 py-1 text-xs font-semibold text-marigold-deep">
-        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-        Pending
-      </span>
-    ) : (
-      <span className="rounded-full border border-ink/15 px-2.5 py-1 text-xs font-medium text-ink/55">Not yet complete</span>
-    );
-
   return (
-    <div className="rounded-2xl border border-pine/12 bg-paper p-4">
-      <div className="flex items-start justify-between gap-3">
-        <p className="font-semibold text-ink">{task.title}</p>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {statusChip}
-          {task.canManage && (onEdit || onDelete || onArchive) && (
-            <span className="ml-1 flex gap-0.5">
-              {onEdit && task.status !== "complete" && <button onClick={onEdit} title="Edit task" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-pine/5 hover:text-pine-deep">✎</button>}
-              {onArchive && <button onClick={onArchive} title="Archive task" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-pine/5 hover:text-pine-deep">🗄</button>}
-              {onDelete && <button onClick={onDelete} title="Delete task" className="grid h-6 w-6 place-items-center rounded-full text-ink/40 hover:bg-red-50 hover:text-red-600">🗑</button>}
+    <div className="rounded-2xl border border-pine/12 bg-paper p-4 transition-colors hover:border-pine/30">
+      <button onClick={onOpen} className="block w-full text-left">
+        <div className="flex items-start justify-between gap-3">
+          <p className="font-semibold text-ink">{task.title}</p>
+          <div className="flex shrink-0 items-center gap-1.5">{statusChipFor(task.status)}</div>
+        </div>
+        {task.description && <p className="mt-1 line-clamp-2 text-sm text-ink/70">{task.description}</p>}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {task.tags.map((tag) => (
+            <span key={tag} className="rounded-full bg-sage/15 px-2 py-0.5 text-[11px] font-medium text-pine-deep">#{tag}</span>
+          ))}
+          {task.requireSubmission && (
+            <span className="rounded-full bg-marigold-soft/60 px-2 py-0.5 text-[11px] font-medium text-marigold-deep">submission required</span>
+          )}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="flex items-center gap-1.5 text-ink/50">
+            Due {fmtDateTime(task.dueAt)}
+            {role === "assigner" && assigneeName ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span>·</span>
+                <Avatar src={assigneeAvatar} name={assigneeName} size={18} />
+                {assigneeName}
+              </span>
+            ) : ""}
+            {byline ? <span className="text-ink/40">· {byline}</span> : ""}
+          </span>
+          {task.submittedAt && (
+            <span className={overdue ? "font-semibold text-red-600" : "text-ink/50"}>
+              Submitted {fmtDateTime(task.submittedAt)}{overdue ? " (late)" : ""}
             </span>
           )}
         </div>
-      </div>
-      {task.description && <p className="mt-1 text-sm text-ink/70">{task.description}</p>}
-
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {task.tags.map((tag) => (
-          <span key={tag} className="rounded-full bg-sage/15 px-2 py-0.5 text-[11px] font-medium text-pine-deep">#{tag}</span>
-        ))}
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="flex items-center gap-1.5 text-ink/50">
-          Due {fmtDateTime(task.dueAt)}
-          {role === "assigner" && assigneeName ? (
-            <span className="inline-flex items-center gap-1.5">
-              <span>·</span>
-              <Avatar src={assigneeAvatar} name={assigneeName} size={18} />
-              {assigneeName}
-            </span>
-          ) : ""}
-        </span>
-        {task.submittedAt && (
-          <span className={overdue ? "font-semibold text-red-600" : "text-ink/50"}>
-            Submitted {fmtDateTime(task.submittedAt)}{overdue ? " (late)" : ""}
-          </span>
-        )}
-      </div>
-
+      </button>
       <div className="mt-3 flex flex-wrap gap-2">
-        {role === "assignee" && task.emailTemplate && (
+        {role === "assignee" && task.emailTemplate && onComposeEmail && (
           <button onClick={onComposeEmail} className="inline-flex items-center gap-1.5 rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep transition-transform hover:scale-[1.02]">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 7.5 8.5 6 8.5-6" /></svg>
             Compose email
           </button>
         )}
-        {role === "assignee" && task.status === "not_complete" && (
-          <button onClick={onSubmit} className="rounded-full bg-pine px-4 py-2 text-xs font-semibold text-paper transition-transform hover:scale-[1.02]">
-            Mark complete
-          </button>
-        )}
-      </div>
-      {role === "assigner" && task.status !== "complete" && (
-        <button onClick={onApprove} className="mt-3 rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep transition-transform hover:scale-[1.02]">
-          {task.status === "pending" ? "Approve as complete" : "Mark complete"}
+        <button onClick={onOpen} className="rounded-full border border-pine/20 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5">
+          Open
         </button>
-      )}
+      </div>
     </div>
   );
 }
 
-// ----------------------------------------------------- multi-assignee group card
-function GroupCard({ group, onOpen, onArchive }: { group: TaskGroup; onOpen: () => void; onArchive: () => void }) {
+function EventRow({ event, onOpen }: { event: ClubEvent; onOpen: () => void }) {
+  return (
+    <button onClick={onOpen} className="block w-full rounded-2xl border border-pine/12 bg-paper p-4 text-left transition-colors hover:border-pine/30">
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-semibold text-ink">{event.title}</p>
+        <span className="shrink-0 rounded-full bg-sage/15 px-2.5 py-1 text-xs font-medium text-pine-deep">
+          {event.allDay ? `${fmtDateOnly(event.startAt)} · all day` : fmtDateTime(event.startAt)}
+        </span>
+      </div>
+      {event.description && <p className="mt-1 line-clamp-2 text-sm text-ink/70">{event.description}</p>}
+      <p className="mt-2 text-xs text-ink/45">
+        {event.scopeKind === "club" && "Whole club"}
+        {event.scopeKind === "all_newbies" && "All newbies"}
+        {event.scopeKind === "group" && `Groups: ${event.scopeGroups.map((g) => GROUP_LABEL[g]).join(", ")}`}
+        {event.scopeKind === "members" && `${event.scopeEmails.length} member(s)`}
+      </p>
+    </button>
+  );
+}
+
+function GroupCard({ group, byline, onOpen, onArchive }: { group: TaskGroup; byline?: string; onOpen: () => void; onArchive: () => void }) {
   const t = group.head;
   const done = group.rows.filter((r) => r.status === "complete").length;
   const total = group.rows.length;
@@ -643,19 +659,230 @@ function GroupCard({ group, onOpen, onArchive }: { group: TaskGroup; onOpen: () 
         </div>
       </div>
       {t.description && <p className="mt-1 text-sm text-ink/70">{t.description}</p>}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {t.tags.map((tag) => <span key={tag} className="rounded-full bg-sage/15 px-2 py-0.5 text-[11px] font-medium text-pine-deep">#{tag}</span>)}
-      </div>
       <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-        <span className="text-ink/50">Due {fmtDateTime(t.dueAt)} · {total} people</span>
+        <span className="text-ink/50">Due {fmtDateTime(t.dueAt)} · {total} people{byline ? ` · ${byline}` : ""}</span>
         <button onClick={onOpen} className="rounded-full border border-pine/20 px-3 py-1 font-medium text-pine-deep hover:bg-pine/5">View / manage</button>
       </div>
     </div>
   );
 }
 
+// --------------------------------------------------------------- task detail popup
+function TaskDetail({
+  task, myEmail, nameOf, avatarOf, onClose, onAction, onEdit, onDelete, onComposeEmail,
+}: {
+  task: Task; myEmail: string;
+  nameOf: (e: string) => string; avatarOf: (e: string) => string | null;
+  onClose: () => void;
+  onAction: (action: string, extra?: Record<string, unknown>) => void | Promise<void>;
+  onEdit: () => void; onDelete: () => void; onComposeEmail?: () => void;
+}) {
+  const isAssignee = task.assigneeEmail.toLowerCase() === myEmail.toLowerCase();
+  const canManage = !!task.canManage;
+  const [subText, setSubText] = useState(task.submissionText ?? "");
+  const [subLink, setSubLink] = useState(task.submissionLink ?? "");
+  const [note, setNote] = useState("");
+  const [comment, setComment] = useState("");
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function run(action: string, extra?: Record<string, unknown>) {
+    setBusy(true);
+    try { await onAction(action, extra); }
+    finally { setBusy(false); }
+  }
+
+  const topComments = task.comments.filter((c) => !c.parentId);
+  const repliesOf = (id: string) => task.comments.filter((c) => c.parentId === id);
+
+  return (
+    <Modal title={task.title} onClose={onClose}>
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center gap-2">
+          {statusChipFor(task.status)}
+          {task.requireSubmission && (
+            <span className="rounded-full bg-marigold-soft/60 px-2.5 py-1 text-xs font-medium text-marigold-deep">submission required</span>
+          )}
+          {task.archived && <span className="rounded-full bg-ink/10 px-2.5 py-1 text-xs font-medium text-ink/60">archived</span>}
+        </div>
+
+        {task.description && <p className="text-sm text-ink/75">{task.description}</p>}
+
+        <div className="grid grid-cols-2 gap-3 text-xs text-ink/55">
+          <div><span className="font-semibold text-ink/70">Due</span><br />{fmtDateTime(task.dueAt)}</div>
+          <div><span className="font-semibold text-ink/70">Assigned to</span><br />
+            <span className="inline-flex items-center gap-1.5"><Avatar src={avatarOf(task.assigneeEmail)} name={nameOf(task.assigneeEmail)} size={18} />{nameOf(task.assigneeEmail)}</span>
+          </div>
+          <div><span className="font-semibold text-ink/70">Assigned by</span><br />{nameOf(task.assignerEmail)}</div>
+          {task.tags.length > 0 && (
+            <div><span className="font-semibold text-ink/70">Tags</span><br />{task.tags.map((t) => `#${t}`).join(" ")}</div>
+          )}
+        </div>
+
+        {/* Submission */}
+        {(task.submissionText || task.submissionLink || isAssignee) && (
+          <div className="rounded-2xl border border-pine/12 p-4">
+            <p className="text-sm font-semibold text-ink">Submission</p>
+            {isAssignee && task.status === "not_complete" ? (
+              <div className="mt-2 space-y-2">
+                <textarea className={inputCls} rows={3} value={subText} onChange={(e) => setSubText(e.target.value)}
+                  placeholder="Write a note about your work (optional unless required)…" />
+                <input className={inputCls} value={subLink} onChange={(e) => setSubLink(e.target.value)}
+                  placeholder="Add a link (optional unless required)…" />
+                <button disabled={busy} onClick={() => run("submit", { submissionText: subText, submissionLink: subLink })}
+                  className="rounded-full bg-pine px-4 py-2 text-xs font-semibold text-paper disabled:opacity-60">
+                  {busy ? "Saving…" : "Mark complete"}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2 space-y-1 text-sm text-ink/75">
+                {task.submissionText && <p className="whitespace-pre-wrap">{task.submissionText}</p>}
+                {task.submissionLink && (
+                  <a href={task.submissionLink} target="_blank" rel="noreferrer" className="break-all text-pine underline">{task.submissionLink}</a>
+                )}
+                {!task.submissionText && !task.submissionLink && <p className="text-ink/40">Nothing submitted yet.</p>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2">
+          {isAssignee && task.status === "complete" && (
+            <button disabled={busy} onClick={() => run("unmark")} className="rounded-full border border-pine/25 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5 disabled:opacity-60">Unmark as complete</button>
+          )}
+          {isAssignee && task.status === "pending" && (
+            <button disabled={busy} onClick={() => run("unmark")} className="rounded-full border border-pine/25 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5 disabled:opacity-60">Retract submission</button>
+          )}
+          {isAssignee && task.emailTemplate && onComposeEmail && (
+            <button onClick={onComposeEmail} className="rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep">Compose email</button>
+          )}
+
+          {canManage && task.status === "pending" && (
+            <>
+              <button disabled={busy} onClick={() => run("approve")} className="rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep disabled:opacity-60">Approve</button>
+              <button disabled={busy} onClick={() => { const c = prompt("Add a comment explaining the rejection (optional):") ?? ""; run("reject", { note: c }); }}
+                className="rounded-full border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60">Reject</button>
+            </>
+          )}
+          {canManage && task.status === "not_complete" && (
+            <button disabled={busy} onClick={() => run("approve")} className="rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep disabled:opacity-60">Mark complete</button>
+          )}
+          {canManage && task.status === "complete" && (
+            <button disabled={busy} onClick={() => { const c = prompt("Add a comment so they know what to change (optional):") ?? ""; run("unmark", { note: c }); }}
+              className="rounded-full border border-pine/25 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5 disabled:opacity-60">Unmark as complete</button>
+          )}
+          {canManage && task.status !== "complete" && (
+            <button onClick={onEdit} className="rounded-full border border-pine/20 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5">Edit</button>
+          )}
+          {canManage && (
+            <>
+              <button disabled={busy} onClick={() => run(task.archived ? "unarchive" : "archive")} className="rounded-full border border-pine/20 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5 disabled:opacity-60">{task.archived ? "Unarchive" : "Archive"}</button>
+              <button onClick={onDelete} className="rounded-full px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>
+            </>
+          )}
+        </div>
+
+        {/* History timeline */}
+        <div>
+          <p className="text-sm font-semibold text-ink">Activity history</p>
+          <ol className="mt-2 space-y-2">
+            {task.history.length === 0 && <li className="text-xs text-ink/40">No activity yet.</li>}
+            {task.history.map((h) => (
+              <li key={h.id} className="flex gap-2 text-xs text-ink/60">
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-pine/40" />
+                <span>
+                  <span className="font-medium text-ink/80">{HISTORY_LABEL[h.action]}</span>
+                  {" "}by {nameOf(h.actorEmail)} · {fmtDateTime(h.at)}
+                  {h.note && <span className="mt-0.5 block text-ink/55">“{h.note}”</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Comments */}
+        <div>
+          <p className="text-sm font-semibold text-ink">Comments</p>
+          <div className="mt-2 space-y-3">
+            {topComments.length === 0 && <p className="text-xs text-ink/40">No comments yet.</p>}
+            {topComments.map((c) => (
+              <div key={c.id} className="rounded-xl border border-pine/10 p-3">
+                <p className="text-xs font-semibold text-ink/80">{nameOf(c.authorEmail)} <span className="font-normal text-ink/40">· {fmtDateTime(c.at)}</span></p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink/75">{c.body}</p>
+                <button onClick={() => setReplyTo(replyTo === c.id ? null : c.id)} className="mt-1 text-[11px] font-medium text-pine-deep hover:underline">Reply</button>
+                <div className="mt-2 space-y-2 border-l border-pine/10 pl-3">
+                  {repliesOf(c.id).map((r) => (
+                    <div key={r.id}>
+                      <p className="text-xs font-semibold text-ink/80">{nameOf(r.authorEmail)} <span className="font-normal text-ink/40">· {fmtDateTime(r.at)}</span></p>
+                      <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink/75">{r.body}</p>
+                    </div>
+                  ))}
+                  {replyTo === c.id && (
+                    <div className="flex gap-2">
+                      <input className={inputCls} style={{ marginTop: 0 }} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write a reply…" />
+                      <button disabled={busy || !comment.trim()} onClick={async () => { await run("comment", { body: comment, parentId: c.id }); setComment(""); setReplyTo(null); }}
+                        className="rounded-xl bg-pine px-3 text-sm font-semibold text-paper disabled:opacity-50">Send</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {replyTo === null && (
+            <div className="mt-3 flex gap-2">
+              <input className={inputCls} style={{ marginTop: 0 }} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment…" />
+              <button disabled={busy || !comment.trim()} onClick={async () => { await run("comment", { body: comment, parentId: null }); setComment(""); }}
+                className="rounded-xl bg-pine px-3 text-sm font-semibold text-paper disabled:opacity-50">Send</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// --------------------------------------------------------------- event detail popup
+function EventDetail({
+  event, nameOf, onClose, onEdit, onArchive, onDelete,
+}: {
+  event: ClubEvent; nameOf: (e: string) => string;
+  onClose: () => void; onEdit?: () => void; onArchive?: () => void; onDelete?: () => void;
+}) {
+  const when = event.allDay
+    ? `${fmtDateOnly(event.startAt)}${event.endAt ? ` – ${fmtDateOnly(event.endAt)}` : ""} · all day`
+    : `${fmtDateTime(event.startAt)}${event.endAt ? ` – ${fmtDateTime(event.endAt)}` : ""}`;
+  return (
+    <Modal title={event.title} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="inline-block rounded-full bg-sage/15 px-3 py-1 text-sm font-medium text-pine-deep">{when}</p>
+        {event.description && <p className="text-sm text-ink/75">{event.description}</p>}
+        <div className="grid grid-cols-2 gap-3 text-xs text-ink/55">
+          <div><span className="font-semibold text-ink/70">Created by</span><br />{nameOf(event.creatorEmail)}</div>
+          <div><span className="font-semibold text-ink/70">Audience</span><br />
+            {event.scopeKind === "club" && "Whole club"}
+            {event.scopeKind === "all_newbies" && "All newbies"}
+            {event.scopeKind === "group" && event.scopeGroups.map((g) => GROUP_LABEL[g]).join(", ")}
+            {event.scopeKind === "members" && `${event.scopeEmails.length} member(s)`}
+          </div>
+        </div>
+        {(onEdit || onArchive || onDelete) && (
+          <div className="flex flex-wrap gap-2">
+            {onEdit && <button onClick={onEdit} className="rounded-full border border-pine/20 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5">Edit</button>}
+            {onArchive && <button onClick={onArchive} className="rounded-full border border-pine/20 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5">{event.archived ? "Unarchive" : "Archive"}</button>}
+            {onDelete && <button onClick={onDelete} className="rounded-full px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // --------------------------------------------------------------------- calendar
-function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: ClubEvent[]; myEmail: string }) {
+function CalendarMonth({ tasks, events, myEmail, onOpenTask, onOpenEvent }: {
+  tasks: Task[]; events: ClubEvent[]; myEmail: string;
+  onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void;
+}) {
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const year = cursor.getFullYear();
@@ -669,8 +896,6 @@ function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: Club
   while (cells.length % 7 !== 0) cells.push(null);
   const today = new Date();
 
-  // The calendar shows only non-archived tasks assigned TO me (self-assigned
-  // included) plus my non-archived events — tasks I assigned to others aren't shown.
   const myTasks = tasks.filter((t) => !t.archived && t.assigneeEmail.toLowerCase() === myEmail.toLowerCase());
   const liveEvents = events.filter((e) => !e.archived);
   const dayTasksFor = (date: Date) => myTasks.filter((t) => sameDay(new Date(t.dueAt), date));
@@ -699,12 +924,8 @@ function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: Club
           const isToday = sameDay(today, date);
           const total = dayTasks.length + dayEvents.length;
           return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setOpenDay(date)}
-              className={`aspect-square rounded-lg border p-1 text-left transition-colors hover:border-pine/40 ${isToday ? "border-marigold bg-marigold-soft/20" : "border-pine/8 bg-pine/[0.015]"}`}
-            >
+            <button key={i} type="button" onClick={() => setOpenDay(date)}
+              className={`aspect-square rounded-lg border p-1 text-left transition-colors hover:border-pine/40 ${isToday ? "border-marigold bg-marigold-soft/20" : "border-pine/8 bg-pine/[0.015]"}`}>
               <div className={`text-[11px] font-semibold ${isToday ? "text-marigold-deep" : "text-ink/55"}`}>{date.getDate()}</div>
               <div className="mt-0.5 space-y-0.5">
                 {dayEvents.slice(0, 1).map((e) => (
@@ -741,14 +962,13 @@ function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: Club
                     <p className="text-xs font-semibold uppercase tracking-wide text-ink/40">Events</p>
                     <div className="mt-2 space-y-2">
                       {dEvents.map((e) => (
-                        <div key={e.id} className="rounded-xl border border-pine/12 p-3">
+                        <button key={e.id} onClick={() => { onOpenEvent(e.id); setOpenDay(null); }} className="block w-full rounded-xl border border-pine/12 p-3 text-left hover:border-pine/30">
                           <div className="flex items-center gap-2">
                             <span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: CAL_EVENT.bg }} />
                             <span className="font-medium text-ink">{e.title}</span>
-                            <span className="ml-auto text-xs text-ink/50">{fmtDateTime(e.startAt)}</span>
+                            <span className="ml-auto text-xs text-ink/50">{e.allDay ? "All day" : fmtDateTime(e.startAt)}</span>
                           </div>
-                          {e.description && <p className="mt-1 text-xs text-ink/60">{e.description}</p>}
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -761,7 +981,7 @@ function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: Club
                         const k = taskKind(t, myEmail);
                         const c = k === "to" ? CAL_TO : CAL_BY;
                         return (
-                          <div key={t.id} className="rounded-xl border border-pine/12 p-3">
+                          <button key={t.id} onClick={() => { onOpenTask(t.id); setOpenDay(null); }} className="block w-full rounded-xl border border-pine/12 p-3 text-left hover:border-pine/30">
                             <div className="flex items-center gap-2">
                               <span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: c.bg }} />
                               <span className="font-medium text-ink">{t.title}</span>
@@ -770,8 +990,7 @@ function CalendarMonth({ tasks, events, myEmail }: { tasks: Task[]; events: Club
                             <p className="mt-1 text-xs text-ink/50">
                               {t.status === "complete" ? "Complete" : t.status === "pending" ? "Pending approval" : "Not yet complete"} · Due {fmtDateTime(t.dueAt)}
                             </p>
-                            {t.description && <p className="mt-1 text-xs text-ink/60">{t.description}</p>}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -805,26 +1024,15 @@ const inputCls =
   "mt-1 w-full rounded-xl border border-pine/15 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-pine";
 const labelCls = "block text-sm font-medium text-ink/80";
 
-// Searchable member checklist (used for "specific members" pickers).
-function MemberPicker({
-  members, selected, onToggle, single,
-}: {
+function MemberPicker({ members, selected, onToggle, single }: {
   members: Lite[]; selected: string[]; onToggle: (email: string) => void; single?: boolean;
 }) {
   const [q, setQ] = useState("");
   const needle = q.trim().toLowerCase();
-  const filtered = needle
-    ? members.filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(needle))
-    : members;
+  const filtered = needle ? members.filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(needle)) : members;
   return (
     <div>
-      <input
-        className={inputCls}
-        style={{ marginTop: 0 }}
-        placeholder="Search members by name…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
+      <input className={inputCls} style={{ marginTop: 0 }} placeholder="Search members by name…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-pine/15 p-2">
         {filtered.length === 0 && <p className="px-2 py-1 text-xs text-ink/40">No matches.</p>}
         {filtered.map((m) => (
@@ -834,9 +1042,7 @@ function MemberPicker({
           </label>
         ))}
       </div>
-      {selected.length > 0 && (
-        <p className="mt-1 text-xs text-ink/45">{selected.length} selected</p>
-      )}
+      {selected.length > 0 && <p className="mt-1 text-xs text-ink/45">{selected.length} selected</p>}
     </div>
   );
 }
@@ -847,15 +1053,13 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
   const [title, setTitle] = useState(editing?.title ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [dueAt, setDueAt] = useState(editing ? toLocalInput(editing.dueAt) : "");
-  const [requiresFile, setRequiresFile] = useState(editing?.requiresFile ?? false);
+  const [requireSubmission, setRequireSubmission] = useState(editing?.requireSubmission ?? false);
   const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
   const [assignees, setAssignees] = useState<string[]>(editing ? [editing.assigneeEmail] : []);
   const scopes = meta.assignScopes.length ? meta.assignScopes : (["members"] as const);
   const [scope, setScope] = useState<"members" | "group" | "club">(isEdit ? "members" : scopes[0]);
-  const [groups, setGroups] = useState<Group[]>(
-    !isEdit && meta.assignableGroups.length === 1 ? meta.assignableGroups : []
-  );
+  const [groups, setGroups] = useState<Group[]>(!isEdit && meta.assignableGroups.length === 1 ? meta.assignableGroups : []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [emailEnabled, setEmailEnabled] = useState(!!editing?.emailTemplate);
@@ -863,51 +1067,38 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
   const [emailBody, setEmailBody] = useState(editing?.emailTemplate?.bodyHtml ?? "");
   const emailTemplate =
     emailEnabled && (emailSubject.trim() || emailBody.replace(/<[^>]*>/g, "").trim())
-      ? { subject: emailSubject, bodyHtml: emailBody }
-      : null;
+      ? { subject: emailSubject, bodyHtml: emailBody } : null;
 
   const toggleAssignee = (email: string) =>
-    setAssignees((a) =>
-      isEdit ? [email] : a.includes(email) ? a.filter((x) => x !== email) : [...a, email]
-    );
-  const toggleGroup = (g: Group) =>
-    setGroups((x) => (x.includes(g) ? x.filter((y) => y !== g) : [...x, g]));
+    setAssignees((a) => (isEdit ? [email] : a.includes(email) ? a.filter((x) => x !== email) : [...a, email]));
+  const toggleGroup = (g: Group) => setGroups((x) => (x.includes(g) ? x.filter((y) => y !== g) : [...x, g]));
 
-  // Turn the chosen audience into a concrete list of assignee emails.
   const resolveAssignees = (): string[] => {
     if (isEdit) return assignees.slice(0, 1);
     if (scope === "club") return meta.allMembers.map((m) => m.email);
     if (scope === "group") return meta.allMembers.filter((m) => groups.includes(m.group)).map((m) => m.email);
     return assignees;
   };
-  const addTag = () => {
-    const t = tagInput.trim().replace(/^#/, "");
-    if (t && !tags.includes(t)) setTags([...tags, t]);
-    setTagInput("");
-  };
+  const addTag = () => { const t = tagInput.trim().replace(/^#/, ""); if (t && !tags.includes(t)) setTags([...tags, t]); setTagInput(""); };
 
   async function submit() {
     setErr(null);
     const dueIso = dueAt ? new Date(dueAt).toISOString() : "";
-    if (!isEdit && resolveAssignees().length === 0) {
-      setErr("Pick who to assign this to.");
-      return;
-    }
+    if (!isEdit && resolveAssignees().length === 0) { setErr("Pick who to assign this to."); return; }
     setBusy(true);
     try {
       if (isEdit && editing) {
         await api(`/api/lms/tasks/${editing.id}`, {
           method: "PATCH",
           body: JSON.stringify({
-            action: "edit", title, description, dueAt: dueIso,
-            requiresFile, tags, assigneeEmail: assignees[0] ?? editing.assigneeEmail,
-            emailTemplate,
+            action: "edit", title, description, dueAt: dueIso, requireSubmission,
+            requiresFile: false, tags, assigneeEmail: assignees[0] ?? editing.assigneeEmail, emailTemplate,
           }),
         });
       } else {
         await api("/api/lms/tasks", {
           method: "POST",
-          body: JSON.stringify({ title, description, dueAt: dueIso, requiresFile, tags, emailTemplate, assigneeEmails: resolveAssignees() }),
+          body: JSON.stringify({ title, description, dueAt: dueIso, requireSubmission, requiresFile: false, tags, emailTemplate, assigneeEmails: resolveAssignees() }),
         });
       }
       onCreated();
@@ -945,26 +1136,20 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
         <div>
           <label className={labelCls}>Assign to{isEdit ? " (pick one)" : ""}</label>
           {isEdit ? (
-            <div className="mt-1">
-              <MemberPicker members={meta.assignableMembers} selected={assignees} onToggle={toggleAssignee} single />
-            </div>
+            <div className="mt-1"><MemberPicker members={meta.assignableMembers} selected={assignees} onToggle={toggleAssignee} single /></div>
           ) : (
             <div className="mt-1 space-y-3">
               {scopes.length > 1 && (
-                <select className={inputCls} style={{ marginTop: 0 }} value={scope}
-                  onChange={(e) => setScope(e.target.value as "members" | "group" | "club")}>
+                <select className={inputCls} style={{ marginTop: 0 }} value={scope} onChange={(e) => setScope(e.target.value as "members" | "group" | "club")}>
                   {scopes.map((s) => <option key={s} value={s}>{SCOPE_LABEL[s]}</option>)}
                 </select>
               )}
-              {scope === "members" && (
-                <MemberPicker members={meta.assignableMembers} selected={assignees} onToggle={toggleAssignee} />
-              )}
+              {scope === "members" && <MemberPicker members={meta.assignableMembers} selected={assignees} onToggle={toggleAssignee} />}
               {scope === "group" && (
                 <div className="flex flex-wrap gap-2">
                   {meta.assignableGroups.map((g) => (
                     <label key={g} className="flex items-center gap-1.5 rounded-full border border-pine/15 px-3 py-1 text-sm">
-                      <input type="checkbox" checked={groups.includes(g)} onChange={() => toggleGroup(g)} />
-                      {GROUP_LABEL[g]}
+                      <input type="checkbox" checked={groups.includes(g)} onChange={() => toggleGroup(g)} />{GROUP_LABEL[g]}
                     </label>
                   ))}
                 </div>
@@ -979,11 +1164,10 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
         </div>
 
         <label className="flex items-center gap-2 text-sm text-ink/70">
-          <input type="checkbox" checked={requiresFile} onChange={(e) => setRequiresFile(e.target.checked)} />
-          Require a file upload <span className="text-xs text-ink/40">(upload coming soon — recorded for later)</span>
+          <input type="checkbox" checked={requireSubmission} onChange={(e) => setRequireSubmission(e.target.checked)} />
+          Require a submission (written note or link) before the doer can mark it complete
         </label>
 
-        {/* Optional email template the doer can launch with one click */}
         <div className="rounded-xl border border-pine/12 p-3">
           <label className="flex items-center gap-2 text-sm font-semibold text-ink">
             <input type="checkbox" checked={emailEnabled} onChange={(e) => setEmailEnabled(e.target.checked)} className="accent-pine" />
@@ -995,12 +1179,7 @@ function TaskForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?:
           </p>
           {emailEnabled && (
             <div className="mt-3 space-y-2">
-              <input
-                className={inputCls}
-                value={emailSubject}
-                onChange={(e) => setEmailSubject(e.target.value)}
-                placeholder="Email subject (e.g. Hello {{firstName}})"
-              />
+              <input className={inputCls} value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} placeholder="Email subject (e.g. Hello {{firstName}})" />
               <RichTextEditor value={editing?.emailTemplate?.bodyHtml ?? ""} onChange={setEmailBody} placeholder="Write the email template…" />
             </div>
           )}
@@ -1020,20 +1199,33 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
   const isEdit = !!editing;
   const [title, setTitle] = useState(editing?.title ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
+  const [allDay, setAllDay] = useState(editing?.allDay ?? false);
   const [startAt, setStartAt] = useState(editing ? toLocalInput(editing.startAt) : "");
+  const [startDate, setStartDate] = useState(editing ? toDateInput(editing.startAt) : "");
+  const [hasEnd, setHasEnd] = useState(!!editing?.endAt);
+  const [endAt, setEndAt] = useState(editing?.endAt ? toLocalInput(editing.endAt) : "");
+  const [endDate, setEndDate] = useState(editing?.endAt ? toDateInput(editing.endAt) : "");
   const [scopeKind, setScopeKind] = useState<Meta["eventScopes"][number]>(editing?.scopeKind ?? meta.eventScopes[0]);
   const [scopeEmails, setScopeEmails] = useState<string[]>(editing?.scopeEmails ?? []);
-  const [scopeGroups, setScopeGroups] = useState<Group[]>(
-    editing?.scopeGroups ?? (meta.targetableGroups.length === 1 ? meta.targetableGroups : [])
-  );
+  const [scopeGroups, setScopeGroups] = useState<Group[]>(editing?.scopeGroups ?? (meta.targetableGroups.length === 1 ? meta.targetableGroups : []));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
     setErr(null); setBusy(true);
     try {
-      const startIso = startAt ? new Date(startAt).toISOString() : "";
-      const payload = { title, description, startAt: startIso, endAt: null, scopeKind, scopeEmails, scopeGroups };
+      let startIso = "";
+      let endIso: string | null = null;
+      if (allDay) {
+        if (!startDate) throw new Error("Pick a start date.");
+        startIso = new Date(`${startDate}T00:00`).toISOString();
+        endIso = hasEnd && endDate ? new Date(`${endDate}T00:00`).toISOString() : null;
+      } else {
+        if (!startAt) throw new Error("Pick a start time.");
+        startIso = new Date(startAt).toISOString();
+        endIso = hasEnd && endAt ? new Date(endAt).toISOString() : null;
+      }
+      const payload = { title, description, startAt: startIso, endAt: endIso, allDay, scopeKind, scopeEmails, scopeGroups };
       if (isEdit && editing) {
         await api(`/api/lms/events/${editing.id}`, { method: "PATCH", body: JSON.stringify(payload) });
       } else {
@@ -1050,8 +1242,34 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
           <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
         <div><label className={labelCls}>Description</label>
           <textarea className={inputCls} rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
-        <div><label className={labelCls}>Start date &amp; time</label>
-          <input type="datetime-local" className={inputCls} value={startAt} onChange={(e) => setStartAt(e.target.value)} /></div>
+
+        <label className="flex items-center gap-2 text-sm font-medium text-ink/80">
+          <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} /> All day
+        </label>
+
+        {allDay ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><label className={labelCls}>Start date</label>
+              <input type="date" className={inputCls} value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
+            {hasEnd && (
+              <div><label className={labelCls}>End date</label>
+                <input type="date" className={inputCls} value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><label className={labelCls}>Start date &amp; time</label>
+              <input type="datetime-local" className={inputCls} value={startAt} onChange={(e) => setStartAt(e.target.value)} /></div>
+            {hasEnd && (
+              <div><label className={labelCls}>End date &amp; time</label>
+                <input type="datetime-local" className={inputCls} value={endAt} onChange={(e) => setEndAt(e.target.value)} /></div>
+            )}
+          </div>
+        )}
+        <label className="flex items-center gap-2 text-sm text-ink/70">
+          <input type="checkbox" checked={hasEnd} onChange={(e) => setHasEnd(e.target.checked)} />
+          Set an end {allDay ? "date" : "time"} (optional — otherwise it shows as a single point)
+        </label>
 
         <div>
           <label className={labelCls}>Who is it for?</label>
@@ -1066,8 +1284,7 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
             <div className="mt-1 flex flex-wrap gap-2">
               {meta.targetableGroups.map((g) => (
                 <label key={g} className="flex items-center gap-1.5 rounded-full border border-pine/15 px-3 py-1 text-sm">
-                  <input type="checkbox" checked={scopeGroups.includes(g)}
-                    onChange={() => setScopeGroups((x) => x.includes(g) ? x.filter((y) => y !== g) : [...x, g])} />
+                  <input type="checkbox" checked={scopeGroups.includes(g)} onChange={() => setScopeGroups((x) => x.includes(g) ? x.filter((y) => y !== g) : [...x, g])} />
                   {GROUP_LABEL[g]}
                 </label>
               ))}
@@ -1082,11 +1299,8 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
               <p className="mt-1 text-xs text-ink/50">No members available to target.</p>
             ) : (
               <div className="mt-1">
-                <MemberPicker
-                  members={meta.eventMemberTargets}
-                  selected={scopeEmails}
-                  onToggle={(email) => setScopeEmails((x) => x.includes(email) ? x.filter((y) => y !== email) : [...x, email])}
-                />
+                <MemberPicker members={meta.eventMemberTargets} selected={scopeEmails}
+                  onToggle={(email) => setScopeEmails((x) => x.includes(email) ? x.filter((y) => y !== email) : [...x, email])} />
               </div>
             )}
           </div>

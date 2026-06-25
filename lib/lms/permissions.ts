@@ -7,7 +7,7 @@
 //  truth — the UI is just a convenience.
 // ============================================================================
 
-import { MEMBERS, canSeeMember, findMember, type Member } from "@/lib/members";
+import { MEMBERS, canSeeMember, type Member } from "@/lib/members";
 import type { ClubEvent, EventScopeKind, ProjectGroup, Task } from "@/lib/lms/types";
 
 const eq = (a?: string | null, b?: string | null) =>
@@ -58,9 +58,22 @@ export function canSubmitTask(task: Task, actorEmail: string): boolean {
   return eq(task.assigneeEmail, actorEmail);
 }
 
-/** The assigner gives final approval → moves it to "complete". */
-export function canApproveTask(task: Task, actorEmail: string): boolean {
-  return eq(task.assignerEmail, actorEmail);
+/** A manager (assigner or co-lead/co-NMT) gives final approval → "complete". */
+export function canApproveTask(actor: Member, task: Task): boolean {
+  return canManageTask(actor, task);
+}
+
+/** A manager rejects a pending submission → back to "not_complete". */
+export function canRejectTask(actor: Member, task: Task): boolean {
+  return canManageTask(actor, task);
+}
+
+/**
+ * Unmark a task as complete. The doer may unmark their own task (changed their
+ * mind), and any manager (creator / co-lead / co-NMT) may unmark it too.
+ */
+export function canUnmarkTask(actor: Member, task: Task): boolean {
+  return eq(task.assigneeEmail, actor.email) || canManageTask(actor, task);
 }
 
 // --------------------------------------------------------------- event create
@@ -124,40 +137,43 @@ export function canTargetMembers(m: Member, emails: string[]): boolean {
 }
 
 // ----------------------------------------------------------- edit / delete
-//  Who may edit or delete an existing task/event.
-//   - The person who CREATED it (assigner of a task / creator of an event).
-//   - A Lead, for OTHER people in their own project group (oversight).
-//  No blanket VP/P override: a VP/P (or Lead) can still be assigned things by
-//  their own group's lead, and must not be able to edit/delete those.
+//  Who may edit / delete / approve / archive an existing task or event.
+//
+//  Ownership follows the CREATOR's peer group:
+//    - The creator (task assigner / event creator) always has control.
+//    - If the creator is a Lead, every Lead of the SAME project group shares
+//      full control (co-leads).
+//    - If the creator is an NMT leader, every NMT leader shares full control.
+//  Roles stack. There is no blanket VP/P override: a VP/P who was *assigned*
+//  something by their group's lead cannot manage it.
 
-/** Can `actor` edit or delete this task? */
-export function canManageTask(actor: Member, task: Task): boolean {
-  if (eq(actor.email, task.assignerEmail)) return true; // creator
-  if (actor.roles.lead) {
-    const assignee = findMember(task.assigneeEmail);
-    if (
-      assignee &&
-      assignee.group === actor.group &&
-      !eq(assignee.email, actor.email) // not a task assigned TO the lead
-    ) {
-      return true;
-    }
+/** Everyone who shares control of things created by `creator` (incl. creator). */
+export function peerEmails(creator: Member): string[] {
+  const set = new Set<string>([creator.email.toLowerCase()]);
+  if (creator.roles.lead) {
+    MEMBERS.filter((m) => m.roles.lead && m.group === creator.group).forEach((m) =>
+      set.add(m.email.toLowerCase()),
+    );
   }
-  return false;
+  if (creator.roles.nmtLeader) {
+    MEMBERS.filter((m) => m.roles.nmtLeader).forEach((m) => set.add(m.email.toLowerCase()));
+  }
+  return Array.from(set);
 }
 
-/** Can `actor` edit or delete this event? */
+/** Assigner emails whose tasks `me` may see/manage (me + co-leads + co-NMT). */
+export function visibleAssignerEmails(me: Member): string[] {
+  return peerEmails(me);
+}
+
+/** Can `actor` edit / delete / archive / approve this task? */
+export function canManageTask(actor: Member, task: Task): boolean {
+  return peerEmails(actor).includes(task.assignerEmail.trim().toLowerCase());
+}
+
+/** Can `actor` edit / delete / archive this event? */
 export function canManageEvent(actor: Member, event: ClubEvent): boolean {
-  if (eq(actor.email, event.creatorEmail)) return true; // creator
-  if (
-    actor.roles.lead &&
-    event.scopeKind === "group" &&
-    event.scopeGroups.includes(actor.group) &&
-    !eq(actor.email, event.creatorEmail)
-  ) {
-    return true; // lead overseeing a group-scoped event for their group
-  }
-  return false;
+  return peerEmails(actor).includes(event.creatorEmail.trim().toLowerCase());
 }
 
 // ----------------------------------------------------------- role display

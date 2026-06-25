@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
 import { allowedEventScopes, canManageEvent, canTargetMembers, targetableGroups } from "@/lib/lms/permissions";
 import { createEvent, listEventsForMember } from "@/lib/lms/store";
+import { notifyEventCreated } from "@/lib/lms/notify";
 import type { NewEventInput, ProjectGroup } from "@/lib/lms/types";
 
 export const dynamic = "force-dynamic";
@@ -31,11 +32,9 @@ export async function POST(req: Request) {
   if (!body.startAt) return NextResponse.json({ error: "A start time is required." }, { status: 400 });
   if (!scopeKind) return NextResponse.json({ error: "Pick an audience." }, { status: 400 });
 
-  // Enforce: the chosen audience must be one this member is allowed to use.
   if (!allowedEventScopes(me).includes(scopeKind))
     return NextResponse.json({ error: "You can't create that kind of event." }, { status: 403 });
 
-  // Enforce: for group-scoped events, only groups they may target.
   const scopeGroups = (body.scopeGroups ?? []) as ProjectGroup[];
   if (scopeKind === "group") {
     const allowed = targetableGroups(me);
@@ -43,8 +42,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "You can't target those groups." }, { status: 403 });
   }
 
-  // Enforce: for "specific members" events, only members they may target
-  // (a Lead is limited to their own project group).
   const scopeEmails = Array.isArray(body.scopeEmails) ? body.scopeEmails : [];
   if (scopeKind === "members") {
     if (scopeEmails.length === 0)
@@ -56,17 +53,25 @@ export async function POST(req: Request) {
       );
   }
 
+  // Optional end time; ignored for all-day single-day events but kept if provided.
+  const allDay = Boolean(body.allDay);
+  const endAt = body.endAt ? body.endAt : null;
+
   const event = await createEvent(
     {
       title,
       description: (body.description ?? "").trim(),
       startAt: body.startAt,
-      endAt: body.endAt ?? null,
+      endAt,
+      allDay,
       scopeKind,
       scopeEmails,
       scopeGroups,
     },
     me.email
   );
+
+  await notifyEventCreated(event).catch(() => {});
+
   return NextResponse.json({ event }, { status: 201 });
 }

@@ -152,8 +152,8 @@ type GCalBody = {
   id: string;
   summary: string;
   description: string;
-  start: { dateTime: string };
-  end: { dateTime: string };
+  start: GCalTime;
+  end: GCalTime;
 };
 
 async function upsertEvent(token: string, body: GCalBody): Promise<"created" | "updated"> {
@@ -192,14 +192,15 @@ async function deleteEvent(token: string, id: string): Promise<void> {
   }
 }
 
+export type GCalTime = { dateTime: string } | { date: string };
 export type SyncItem = {
   key: string; // "task:ID" | "event:ID"
   kind: "task" | "event";
   id: string;
   summary: string;
   description: string;
-  start: string; // ISO
-  end: string; // ISO
+  start: GCalTime;
+  end: GCalTime;
 };
 
 /** Push items, then delete any previously-synced items that are gone now. */
@@ -219,8 +220,8 @@ export async function syncToCalendar(
       id: gcalId(it.kind, it.id, email),
       summary: it.summary,
       description: it.description,
-      start: { dateTime: it.start },
-      end: { dateTime: it.end },
+      start: it.start,
+      end: it.end,
     });
     r === "created" ? created++ : updated++;
   }

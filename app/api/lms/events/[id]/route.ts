@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
 import { allowedEventScopes, canManageEvent, canTargetMembers, targetableGroups } from "@/lib/lms/permissions";
 import { deleteEvent, getEvent, setEventArchived, updateEvent } from "@/lib/lms/store";
+import { notifyEventRemoved } from "@/lib/lms/notify";
 import type { ProjectGroup } from "@/lib/lms/types";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!title) return NextResponse.json({ error: "A title is required." }, { status: 400 });
   if (!startAt) return NextResponse.json({ error: "A start time is required." }, { status: 400 });
 
-  // Re-validate the audience the same way creation does.
   if (!allowedEventScopes(me).includes(scopeKind))
     return NextResponse.json({ error: "You can't use that audience." }, { status: 403 });
   const scopeGroups = (body.scopeGroups ?? []) as ProjectGroup[];
@@ -57,6 +57,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     description: String(body.description ?? "").trim(),
     startAt,
     endAt: (body.endAt as string) ?? null,
+    allDay: Boolean(body.allDay),
     scopeKind,
     scopeEmails,
     scopeGroups,
@@ -72,5 +73,6 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (!canManageEvent(me, event))
     return NextResponse.json({ error: "You can't delete this event." }, { status: 403 });
   await deleteEvent(event.id);
+  await notifyEventRemoved(event).catch(() => {});
   return NextResponse.json({ ok: true });
 }

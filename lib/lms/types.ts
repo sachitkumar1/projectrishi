@@ -36,6 +36,31 @@ export type TaskStatus = "not_complete" | "pending" | "complete";
 
 export type EmailTemplate = { subject: string; bodyHtml: string };
 
+// A single entry in a task's activity history (one per assignee row).
+export type TaskHistoryAction =
+  | "created"
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "unmarked"
+  | "edited";
+export type TaskHistoryEntry = {
+  id: string;
+  action: TaskHistoryAction;
+  actorEmail: string;
+  at: string; // ISO
+  note?: string; // optional comment attached to the action
+};
+
+// A comment (or reply) on a task. parentId null = top-level.
+export type TaskComment = {
+  id: string;
+  authorEmail: string;
+  body: string;
+  at: string; // ISO
+  parentId: string | null;
+};
+
 export type Task = {
   id: string;
   groupId: string; // shared by all copies created in one "assign to multiple people" action
@@ -43,12 +68,18 @@ export type Task = {
   description: string;
   tags: string[];
   dueAt: string; // ISO datetime
-  requiresFile: boolean; // upload deferred — flag kept for the future
+  requiresFile: boolean; // legacy column — file upload deferred
+  requireSubmission: boolean; // assigner requires a text/link submission before "done"
   emailTemplate: EmailTemplate | null;
   assignerEmail: string;
   assigneeEmail: string;
   status: TaskStatus;
   submittedAt: string | null; // when the assignee marked it done
+  submissionText: string | null;
+  submissionLink: string | null;
+  history: TaskHistoryEntry[];
+  comments: TaskComment[];
+  remindersSent: string[]; // reminder keys already emailed (e.g. "3d", "overdue:2026-06-25")
   archived: boolean;
   createdAt: string;
 };
@@ -59,6 +90,7 @@ export type NewTaskInput = {
   tags: string[];
   dueAt: string;
   requiresFile: boolean;
+  requireSubmission: boolean;
   emailTemplate: EmailTemplate | null;
   assigneeEmails: string[]; // one task row is created per assignee
 };
@@ -72,6 +104,7 @@ export type ClubEvent = {
   description: string;
   startAt: string;
   endAt: string | null;
+  allDay: boolean;
   creatorEmail: string;
   scopeKind: EventScopeKind;
   scopeEmails: string[]; // when scopeKind === "members"
@@ -85,7 +118,20 @@ export type NewEventInput = {
   description: string;
   startAt: string;
   endAt: string | null;
+  allDay: boolean;
   scopeKind: EventScopeKind;
   scopeEmails: string[];
   scopeGroups: ProjectGroup[];
+};
+
+// ---- Notifications ----
+export type Notification = {
+  id: string;
+  userEmail: string;
+  title: string;
+  body: string;
+  kind: string;
+  refId: string | null;
+  read: boolean;
+  createdAt: string;
 };
