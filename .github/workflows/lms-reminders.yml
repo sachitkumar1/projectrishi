@@ -1,12 +1,19 @@
 name: LMS Reminders
 
 "on":
+  push:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "2-59/5 * * * *"
+
+permissions:
+  contents: read
 
 jobs:
   reminders:
+    name: Send Reminder Emails
     runs-on: ubuntu-latest
 
     steps:
@@ -15,6 +22,9 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          echo "SITE_URL is set: $([ -n "$SITE_URL" ] && echo yes || echo no)"
+          echo "CRON_SECRET is set: $([ -n "$CRON_SECRET" ] && echo yes || echo no)"
+
           curl --silent --show-error --fail \
             -X POST \
             "$SITE_URL/api/lms/cron/reminders" \
