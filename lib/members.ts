@@ -65,6 +65,7 @@ export const MEMBERS: Member[] = [
   { email: "kumarsachit2007@gmail.com", firstName: "SachitNMT", lastName: "Kumar", group: "W", roles: roles({ nmtLeader: true }), hidden: true },
   { email: "anonymousposter1029@gmail.com", firstName: "SachitNewbie", lastName: "Kumar", group: "W", roles: roles({ newbie: true }), hidden: true },
   { email: "ryancr@berkeley.edu", firstName: "Ryan", lastName: "Raphael", group: "E", roles: roles({ vpp: true, exec: true }) },
+  { email: "narayannirali@berkeley.edu", firstName: "Niral", lastName: "Narayan", group: "R", roles: roles({nmtLeader: true})}
 ];
 
 /** Look up a member by email (case-insensitive). Returns undefined if not allowed. */
