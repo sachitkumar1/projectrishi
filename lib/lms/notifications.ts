@@ -8,6 +8,7 @@
 import crypto from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Notification } from "@/lib/lms/types";
+import { sendPushToUser } from "@/lib/lms/push";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -72,9 +73,11 @@ export async function addNotification(input: NewNotification): Promise<Notificat
       created_at: record.createdAt,
     });
     if (error) throw new Error(error.message);
+    void sendPushToUser(record.userEmail, { title: record.title, body: record.body }).catch(() => {});
     return record;
   }
   mem.unshift(record);
+  void sendPushToUser(record.userEmail, { title: record.title, body: record.body }).catch(() => {});
   return record;
 }
 
