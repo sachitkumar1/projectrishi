@@ -20,8 +20,10 @@ type GmailStatus = {
   personal: boolean;
   personalEmail: string;
   club: boolean;
+  notify: boolean;
   canConnectClub: boolean;
   sharedSender: string;
+  notifySender: string;
 };
 
 function ReadonlyField({ label, value }: { label: string; value: string }) {
@@ -61,7 +63,7 @@ export default function SettingsPage() {
     loadGmail();
   }, []);
 
-  async function disconnectGmail(target: "personal" | "club") {
+  async function disconnectGmail(target: "personal" | "club" | "notify") {
     await fetch(`/api/lms/gmail/disconnect?target=${target}`, { method: "POST" });
     loadGmail();
   }
@@ -148,11 +150,11 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                {/* Club (exec only) */}
+                {/* Club — announcements, newsletters, composed emails (exec only) */}
                 {gmail.canConnectClub && (
                   <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-ink/10 p-4">
                     <div>
-                      <p className="text-sm font-semibold text-ink">Club email</p>
+                      <p className="text-sm font-semibold text-ink">Announcements &amp; newsletters</p>
                       <p className="text-xs text-ink/50">{gmail.sharedSender}</p>
                     </div>
                     {gmail.club ? (
@@ -161,6 +163,25 @@ export default function SettingsPage() {
                       </button>
                     ) : (
                       <a href="/api/lms/gmail/connect?target=club" className="rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep hover:brightness-95">
+                        Connect
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Notifications — reminders + task/event notification emails (exec only) */}
+                {gmail.canConnectClub && (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-ink/10 p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">Task &amp; reminder notifications</p>
+                      <p className="text-xs text-ink/50">{gmail.notifySender}</p>
+                    </div>
+                    {gmail.notify ? (
+                      <button onClick={() => disconnectGmail("notify")} className="rounded-full border border-ink/15 px-4 py-2 text-xs font-semibold text-ink/70 hover:bg-ink/5">
+                        Disconnect
+                      </button>
+                    ) : (
+                      <a href="/api/lms/gmail/connect?target=notify" className="rounded-full bg-marigold px-4 py-2 text-xs font-semibold text-pine-deep hover:brightness-95">
                         Connect
                       </a>
                     )}

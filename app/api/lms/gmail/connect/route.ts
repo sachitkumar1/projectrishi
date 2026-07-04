@@ -10,9 +10,10 @@ export async function GET(req: NextRequest) {
   const me = await getCurrentMember();
   if (!me) return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL));
 
-  const target = new URL(req.url).searchParams.get("target") === "club" ? "club" : "personal";
-  // Only exec may connect the shared club sending account.
-  if (target === "club" && !me.roles.exec)
+  const rawTarget = new URL(req.url).searchParams.get("target");
+  const target = rawTarget === "club" ? "club" : rawTarget === "notify" ? "notify" : "personal";
+  // Only exec may connect a shared club sending account (club or notify).
+  if ((target === "club" || target === "notify") && !me.roles.exec)
     return NextResponse.redirect(new URL("/dashboard?gmail=forbidden", process.env.NEXTAUTH_URL));
 
   const state = crypto.randomBytes(16).toString("hex");

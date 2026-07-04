@@ -12,8 +12,8 @@ import { findMember, memberFullName, MEMBERS, type Member } from "@/lib/members"
 import {
   getGmailConnection,
   sendViaConnection,
-  SHARED_SENDER,
-  SHARED_FROM_NAME,
+  NOTIFY_SENDER,
+  NOTIFY_FROM_NAME,
 } from "@/lib/lms/gmail";
 import { addNotification } from "@/lib/lms/notifications";
 import type { ClubEvent, Task } from "@/lib/lms/types";
@@ -70,12 +70,12 @@ async function notify(
   }
   // Email from the shared club account.
   try {
-    const conn = await getGmailConnection(SHARED_SENDER);
+    const conn = await getGmailConnection(NOTIFY_SENDER);
     if (!conn) return; // club Gmail not connected yet — notification still delivered
     const fromEmail = conn.connectedGoogleEmail ?? conn.accountEmail;
     await sendViaConnection(conn, {
       fromEmail,
-      fromName: SHARED_FROM_NAME,
+      fromName: NOTIFY_FROM_NAME,
       to: [recipientEmail],
       subject,
       html: htmlFromText(body),

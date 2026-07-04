@@ -100,6 +100,9 @@ export default function Footer() {
             <Link href="/privacy" className="text-xs text-paper/50 transition-colors hover:text-paper">
               Privacy Policy
             </Link>
+            <Link href="/terms" className="text-xs text-paper/50 transition-colors hover:text-paper">
+              Terms of Service
+            </Link>
             <span className="text-xs text-paper/50">
               Promoting sustainable development since 2008.
             </span>

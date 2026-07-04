@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
-import { exchangeGmailCode, saveGmailConnection, SHARED_SENDER } from "@/lib/lms/gmail";
+import { exchangeGmailCode, saveGmailConnection, NOTIFY_SENDER, SHARED_SENDER } from "@/lib/lms/gmail";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const cookieState = req.cookies.get("gmail_state")?.value;
-  const target = req.cookies.get("gmail_target")?.value === "club" ? "club" : "personal";
+  const rawTarget = req.cookies.get("gmail_target")?.value;
+  const target = rawTarget === "club" ? "club" : rawTarget === "notify" ? "notify" : "personal";
 
   const fail = (reason: string) => {
     const r = NextResponse.redirect(new URL(`/dashboard?gmail=${reason}`, base));
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   };
 
   if (!code || !state || !cookieState || state !== cookieState) return fail("error");
-  if (target === "club" && !me.roles.exec) return fail("forbidden");
+  if ((target === "club" || target === "notify") && !me.roles.exec) return fail("forbidden");
 
   const result = await exchangeGmailCode(code);
   if (!result) return fail("error");
@@ -35,6 +36,11 @@ export async function GET(req: NextRequest) {
     if (!result.email || result.email.toLowerCase() !== SHARED_SENDER.toLowerCase())
       return fail("wrong_account");
     await saveGmailConnection(SHARED_SENDER, result.refreshToken, result.email, true, me.email);
+  } else if (target === "notify") {
+    // The notifications account must actually be the notify address.
+    if (!result.email || result.email.toLowerCase() !== NOTIFY_SENDER.toLowerCase())
+      return fail("wrong_account");
+    await saveGmailConnection(NOTIFY_SENDER, result.refreshToken, result.email, true, me.email);
   } else {
     await saveGmailConnection(me.email, result.refreshToken, result.email, false, me.email);
   }
