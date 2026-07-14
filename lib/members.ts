@@ -53,7 +53,7 @@ function roles(flags: Partial<RoleFlags>): RoleFlags {
 }
 
 export const MEMBERS: Member[] = [
-  { email: "sachitk@berkeley.edu", firstName: "Sachit", lastName: "Kumar", phone: "", group: "E", roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true, outreach: true, newbie: true, financeDirector: true }) },
+  { email: "sachitk@berkeley.edu", firstName: "Sachit", lastName: "Kumar", phone: "9494069649", group: "E", roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true, outreach: true, newbie: true, financeDirector: true }) },
   { email: "palakprabhakar1@berkeley.edu", firstName: "Palak", lastName: "Prabhakar", phone: "", group: "W", roles: roles({ lead: true }) },
   { email: "thanuj@berkeley.edu", firstName: "Thanuj", lastName: "Komatireddy", phone: "", group: "H", roles: roles({ exec: true, financeDirector: true }) },
   { email: "riaprathinidhi1@berkeley.edu", firstName: "Ria", lastName: "Prathinidhi", phone: "", group: "R", roles: roles({ lead: true }) },
