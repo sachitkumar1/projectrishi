@@ -44,22 +44,26 @@ function roles(flags: Partial<RoleFlags>): RoleFlags {
     vpp: false,
     exec: false,
     outreach: false,
+    financeDirector: false,
+    president: false,
+    vpProjects: false,
+    vpInternal: false,
     ...flags,
   };
 }
 
 export const MEMBERS: Member[] = [
-  { email: "sachitk@berkeley.edu", firstName: "Sachit", lastName: "Kumar", phone: "(949) 406-9649", group: "E", roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true, outreach: true, newbie: true }) },
+  { email: "sachitk@berkeley.edu", firstName: "Sachit", lastName: "Kumar", phone: "", group: "E", roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true, outreach: true, newbie: true, financeDirector: true }) },
   { email: "palakprabhakar1@berkeley.edu", firstName: "Palak", lastName: "Prabhakar", phone: "", group: "W", roles: roles({ lead: true }) },
-  { email: "thanuj@berkeley.edu", firstName: "Thanuj", lastName: "Komatireddy", phone: "", group: "H", roles: roles({ exec: true }) },
+  { email: "thanuj@berkeley.edu", firstName: "Thanuj", lastName: "Komatireddy", phone: "", group: "H", roles: roles({ exec: true, financeDirector: true }) },
   { email: "riaprathinidhi1@berkeley.edu", firstName: "Ria", lastName: "Prathinidhi", phone: "", group: "R", roles: roles({ lead: true }) },
   { email: "aarushimupparti@berkeley.edu", firstName: "Aarushi", lastName: "Mupparti", phone: "", group: "H", roles: roles({ lead: true }) },
   { email: "arnavmishra@berkeley.edu", firstName: "Arnav", lastName: "Mishra", phone: "", group: "R", roles: roles({}) },
   { email: "megha_ramachandran@berkeley.edu", firstName: "Megha", lastName: "Ramachandran", phone: "", group: "E", roles: roles({ lead: true }) },
   { email: "nikita_jadhav@berkeley.edu", firstName: "Nikita", lastName: "Jadhav", phone: "", group: "W", roles: roles({ exec: true, outreach: true }) },
   { email: "autkarsh@berkeley.edu", firstName: "Utkarsh", lastName: "Agarwal", phone: "", group: "E", roles: roles({ lead: true }) },
-  { email: "tanyagoel101@berkeley.edu", firstName: "Tanya", lastName: "Goel", phone: "", group: "H", roles: roles({ vpp: true, exec: true }) },
-  { email: "grishma_jain@berkeley.edu", firstName: "Grishma", lastName: "Jain", phone: "", group: "E", roles: roles({ vpp: true, exec: true }) },
+  { email: "tanyagoel101@berkeley.edu", firstName: "Tanya", lastName: "Goel", phone: "", group: "H", roles: roles({ vpp: true, exec: true, vpProjects: true }) },
+  { email: "grishma_jain@berkeley.edu", firstName: "Grishma", lastName: "Jain", phone: "", group: "E", roles: roles({ vpp: true, exec: true, president: true }) },
   { email: "akotte@berkeley.edu", firstName: "Advik", lastName: "Kotte", phone: "", group: "W", roles: roles({ nmtLeader: true }) },
   { email: "aryaprince@berkeley.edu", firstName: "Arya", lastName: "Prince", phone: "", group: "E", roles: roles({}) },
   { email: "platy07@berkeley.edu", firstName: "Maia", lastName: "Berges", phone: "", group: "R", roles: roles({ lead: true }) },
@@ -67,7 +71,7 @@ export const MEMBERS: Member[] = [
   { email: "sachitkumar2020@gmail.com", firstName: "SachitInternal", lastName: "Kumar", phone: "", group: "W", roles: roles({ internal: true }), hidden: true },
   { email: "kumarsachit2007@gmail.com", firstName: "SachitNMT", lastName: "Kumar", phone: "", group: "W", roles: roles({ nmtLeader: true }), hidden: true },
   { email: "anonymousposter1029@gmail.com", firstName: "SachitNewbie", lastName: "Kumar", phone: "", group: "W", roles: roles({ newbie: true }), hidden: true },
-  { email: "ryancr@berkeley.edu", firstName: "Ryan", lastName: "Raphael", phone: "", group: "E", roles: roles({ vpp: true, exec: true }) },
+  { email: "ryancr@berkeley.edu", firstName: "Ryan", lastName: "Raphael", phone: "", group: "E", roles: roles({ vpp: true, exec: true, vpInternal: true }) },
   { email: "narayannirali@berkeley.edu", firstName: "Nirali", lastName: "Narayan", phone: "", group: "R", roles: roles({nmtLeader: true})},
   { email: "dilpreetvohra@berkeley.edu", firstName: "Jannat", lastName: "Vohra", phone: "", group: "W", roles: roles({ lead: true})}
 ];
@@ -88,12 +92,19 @@ export function memberFullName(m: Member): string {
 export function memberRoleLabel(m: Member): string {
   const r = m.roles;
   const g = PROJECT_GROUP_LABELS[m.group];
+  // A specific leadership title is shown on its own — it replaces the umbrella
+  // "Exec" / "VP / President" terms and any other roles that person holds.
+  if (r.president) return "President";
+  if (r.vpProjects) return "VP of Projects";
+  if (r.vpInternal) return "VP Internal";
+  if (r.financeDirector) return "Director of Finance";
+  if (r.outreach) return "Director of Outreach";
+  // Otherwise, the general multi-role label.
   const parts: string[] = [];
   if (r.vpp) parts.push("VP / President");
-  if (r.outreach) parts.push("Director of Outreach");
   if (r.lead) parts.push(`${g} Lead`);
   if (r.nmtLeader) parts.push("NMT Leader");
-  if (r.exec && !r.vpp) parts.push("Exec");
+  if (r.exec) parts.push("Exec");
   if (r.internal && parts.length === 0) parts.push("Internal");
   if (r.newbie && parts.length === 0) parts.push("Newbie");
   if (parts.length === 0) parts.push(`${g} Member`);

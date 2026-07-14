@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Contours from "@/components/Contours";
 
-type Entry = { loginEmail: string; name: string; role: string; email: string; phone: string };
+type Entry = { loginEmail: string; name: string; role: string; group: string; email: string; phone: string };
 
 export default function DirectoryPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -39,7 +39,7 @@ export default function DirectoryPage() {
     const s = q.trim().toLowerCase();
     if (!s) return entries;
     return entries.filter((e) =>
-      [e.name, e.role, e.email, e.phone].some((f) => f.toLowerCase().includes(s)),
+      [e.name, e.role, e.group, e.email, e.phone].some((f) => f.toLowerCase().includes(s)),
     );
   }, [entries, q]);
 
@@ -85,7 +85,6 @@ export default function DirectoryPage() {
             Back to dashboard
           </Link>
           <h1 className="mt-4 font-display text-4xl font-semibold sm:text-5xl">Member Directory</h1>
-          <p className="mt-2 max-w-2xl text-paper/70">Everyone in the club, with their role and contact info. Search by name, role, email, or phone. You can edit your own contact details.</p>
         </div>
       </section>
 
@@ -113,11 +112,12 @@ export default function DirectoryPage() {
             <p className="mt-3 text-xs text-ink/45">{filtered.length} of {entries.length} members</p>
 
             <div className="mt-4 overflow-x-auto rounded-2xl border border-pine/12">
-              <table className="w-full min-w-[640px] text-left text-sm">
+              <table className="w-full min-w-[760px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-pine/12 bg-pine/[0.03] text-xs uppercase tracking-wide text-ink/50">
                     <th className="px-4 py-3 font-semibold">Name</th>
                     <th className="px-4 py-3 font-semibold">Role</th>
+                    <th className="px-4 py-3 font-semibold">Project Group</th>
                     <th className="px-4 py-3 font-semibold">Email</th>
                     <th className="px-4 py-3 font-semibold">Phone</th>
                   </tr>
@@ -131,6 +131,7 @@ export default function DirectoryPage() {
                           {e.name}{isMe && <span className="ml-2 rounded-full bg-pine/10 px-2 py-0.5 text-[10px] font-semibold text-pine-deep">You</span>}
                         </td>
                         <td className="px-4 py-3 text-ink/70">{e.role}</td>
+                        <td className="px-4 py-3 text-ink/70">{e.group}</td>
                         <td className="px-4 py-3">
                           <a href={`mailto:${e.email}`} className="text-pine hover:underline">{e.email}</a>
                         </td>
@@ -141,7 +142,7 @@ export default function DirectoryPage() {
                     );
                   })}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={4} className="px-4 py-8 text-center text-ink/45">No members match your search.</td></tr>
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-ink/45">No members match your search.</td></tr>
                   )}
                 </tbody>
               </table>

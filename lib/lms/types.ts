@@ -21,6 +21,12 @@ export type RoleFlags = {
   vpp: boolean; // VP / President
   exec: boolean;
   outreach: boolean; // Director of Outreach (can post Newsletters)
+  // Specific Exec titles (under the "exec" umbrella):
+  financeDirector: boolean; // Director of Finance
+  // Specific VP/P titles (under the "vpp" umbrella):
+  president: boolean;
+  vpProjects: boolean; // VP of Projects
+  vpInternal: boolean; // VP Internal
 };
 
 export type MemberProfile = {

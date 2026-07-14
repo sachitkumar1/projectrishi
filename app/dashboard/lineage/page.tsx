@@ -111,10 +111,6 @@ export default function LineagePage() {
             <h1 className="mt-4 font-display text-4xl font-semibold sm:text-5xl">
               RISHI Lineage
             </h1>
-            <p className="mt-3 max-w-2xl text-paper/75">
-              The historic family trees of bigs and littles. Each head sits at
-              the top, with their littles branching below.
-            </p>
           </Reveal>
         </div>
       </section>

@@ -70,65 +70,45 @@ export default function DashboardPage() {
           <CreateMenu />
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Lineage card */}
+          {/* Member Directory (2/3 height) + RISHI Lineage (1/3 height) */}
           <Reveal>
-            <Link
-              href="/dashboard/lineage"
-              className="group flex h-full flex-col justify-between rounded-3xl border border-pine/15 bg-pine/[0.03] p-8 transition-colors hover:border-pine hover:bg-pine hover:text-paper"
-            >
-              <div>
-                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-marigold text-pine-deep">
-                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <circle cx="12" cy="5" r="2.5" />
-                    <circle cx="5" cy="19" r="2.5" />
-                    <circle cx="19" cy="19" r="2.5" />
-                    <path d="M12 7.5v4m0 0H5.5a1 1 0 0 0-1 1v3.5m7.5-4.5H18.5a1 1 0 0 1 1 1v3.5" />
-                  </svg>
-                </span>
-                <h2 className="mt-5 font-display text-2xl font-semibold">
-                  RISHI Lineage
-                </h2>
-                <p className="mt-2 max-w-sm text-sm opacity-80">
-                  View the historic family trees of bigs and littles.
-                </p>
-              </div>
-              <span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold">
-                View lineages
-                <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
-            </Link>
-          </Reveal>
-
-          {/* Member Directory card */}
-          <Reveal delay={0.05}>
-            <Link
-              href="/dashboard/directory"
-              className="group flex h-full flex-col justify-between rounded-3xl border border-pine/15 bg-pine/[0.03] p-8 transition-colors hover:border-pine hover:bg-pine hover:text-paper"
-            >
-              <div>
-                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-marigold text-pine-deep">
+            <div className="grid h-full grid-rows-[2fr_1fr] gap-4">
+              <Link
+                href="/dashboard/directory"
+                className="group flex min-h-0 flex-col justify-between rounded-3xl border border-pine/15 bg-pine/[0.03] p-6 transition-colors hover:border-pine hover:bg-pine hover:text-paper"
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-marigold text-pine-deep">
                   <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
                 </span>
-                <h2 className="mt-5 font-display text-2xl font-semibold">
+                <span className="mt-5 inline-flex items-center gap-2 font-display text-xl font-semibold">
                   Member Directory
-                </h2>
-                <p className="mt-2 max-w-sm text-sm opacity-80">
-                  Look up any member&apos;s role, email, and phone — and edit your own.
-                </p>
-              </div>
-              <span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold">
-                Open directory
-                <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
-            </Link>
+                  <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </span>
+              </Link>
+
+              <Link
+                href="/dashboard/lineage"
+                className="group flex min-h-0 items-center gap-4 rounded-3xl border border-pine/15 bg-pine/[0.03] p-5 transition-colors hover:border-pine hover:bg-pine hover:text-paper"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-marigold text-pine-deep">
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="12" cy="5" r="2.5" />
+                    <circle cx="5" cy="19" r="2.5" />
+                    <circle cx="19" cy="19" r="2.5" />
+                    <path d="M12 7.5v4m0 0H5.5a1 1 0 0 0-1 1v3.5m7.5-4.5H18.5a1 1 0 0 1 1 1v3.5" />
+                  </svg>
+                </span>
+                <span className="font-display text-lg font-semibold leading-tight">
+                  RISHI Lineage
+                </span>
+              </Link>
+            </div>
           </Reveal>
 
           {/* Announcements card */}

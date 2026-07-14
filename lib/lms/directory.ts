@@ -9,6 +9,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { MEMBERS, memberFullName, memberRoleLabel } from "@/lib/members";
+import { PROJECT_GROUP_LABELS } from "@/lib/lms/types";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -30,6 +31,7 @@ export type DirectoryEntry = {
   loginEmail: string; // stable identity (never changes)
   name: string;
   role: string;
+  group: string;
   email: string; // override ?? members.ts email
   phone: string; // override ?? members.ts phone ?? ""
 };
@@ -96,6 +98,7 @@ export async function listDirectory(): Promise<DirectoryEntry[]> {
         loginEmail: lc(m.email),
         name: memberFullName(m),
         role: memberRoleLabel(m),
+        group: PROJECT_GROUP_LABELS[m.group],
         email: o?.contactEmail ?? m.email,
         phone: o?.phone ?? m.phone ?? "",
       };
