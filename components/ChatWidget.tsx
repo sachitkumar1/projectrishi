@@ -66,6 +66,14 @@ export default function ChatWidget() {
     return other ? nameOf(other) : "Direct message";
   }, [me, nameOf]);
 
+  async function deleteChat(id: string, title: string) {
+    if (!confirm(`Delete your copy of "${title}"? It's removed from your list only — the other people keep the conversation, and it'll come back if someone sends a new message.`)) return;
+    try {
+      await fetch(`/api/lms/chat/${id}`, { method: "DELETE" });
+      if (activeId === id) { setActiveId(null); setView("list"); }
+      await loadChats();
+    } catch { /* ignore */ }
+  }
   const loadChats = useCallback(async () => {
     try {
       const res = await fetch("/api/lms/chat");
@@ -248,18 +256,24 @@ export default function ChatWidget() {
                   const unread = c.lastAt && (!seen[c.id] || c.lastAt > seen[c.id]);
                   const other = c.memberEmails.find((e) => e.toLowerCase() !== me.toLowerCase()) || me;
                   return (
-                    <button key={c.id} onClick={() => openChat(c.id)}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-pine/[0.04]">
-                      <Avatar src={c.isGroup ? null : avatarOf(other)} name={chatTitle(c)} size={40} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className={`truncate text-sm ${unread ? "font-bold text-ink" : "font-semibold text-ink/90"}`}>{chatTitle(c)}</p>
-                          {c.lastAt && <span className="shrink-0 text-[11px] text-ink/40">{fmtDay(c.lastAt)}</span>}
+                    <div key={c.id} className="group relative flex w-full items-center gap-2 rounded-xl px-2 py-2.5 hover:bg-pine/[0.04]">
+                      <button onClick={() => openChat(c.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                        <Avatar src={c.isGroup ? null : avatarOf(other)} name={chatTitle(c)} size={40} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`truncate text-sm ${unread ? "font-bold text-ink" : "font-semibold text-ink/90"}`}>{chatTitle(c)}</p>
+                            {c.lastAt && <span className="shrink-0 text-[11px] text-ink/40">{fmtDay(c.lastAt)}</span>}
+                          </div>
+                          <p className={`truncate text-xs ${unread ? "text-ink/80" : "text-ink/50"}`}>{c.lastMessage ?? "No messages yet"}</p>
                         </div>
-                        <p className={`truncate text-xs ${unread ? "text-ink/80" : "text-ink/50"}`}>{c.lastMessage ?? "No messages yet"}</p>
-                      </div>
-                      {unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-marigold" />}
-                    </button>
+                        {unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-marigold" />}
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteChat(c.id, chatTitle(c)); }}
+                        title="Delete conversation" aria-label="Delete conversation"
+                        className="shrink-0 rounded-full p-1.5 text-ink/30 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100">
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>
+                      </button>
+                    </div>
                   );
                 })}
               </div>

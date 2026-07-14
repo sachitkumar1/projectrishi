@@ -294,6 +294,10 @@ export async function approveTask(task: Task, actorEmail: string): Promise<Task>
   return patchTask(task.id, { status: "complete", history });
 }
 
+export async function nudgeTask(task: Task, actorEmail: string): Promise<Task> {
+  const history = [...task.history, historyEntry("nudged", actorEmail)];
+  return patchTask(task.id, { history });
+}
 export async function rejectTask(task: Task, actorEmail: string, note?: string | null): Promise<Task> {
   const history = [...task.history, historyEntry("rejected", actorEmail, note)];
   return patchTask(task.id, { status: "not_complete", history });

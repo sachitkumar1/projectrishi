@@ -33,8 +33,8 @@ export const SHARED_SENDER = "ucberkeley@projectrishi.org";
 export const SHARED_FROM_NAME = "Project RISHI";
 
 /** A SEPARATE club account used only for automated notification emails
- *  (task assigned/approved/rejected/unmarked/submitted/archived/deleted,
- *  events, and reminders). Kept apart from SHARED_SENDER on purpose. */
+ *  (task/event notifications, reminders, and nudges). Kept apart from
+ *  SHARED_SENDER on purpose. */
 export const NOTIFY_SENDER = "projectrishiucberkeley@gmail.com";
 export const NOTIFY_FROM_NAME = "Project RISHI";
 

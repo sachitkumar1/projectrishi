@@ -43,6 +43,10 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
+  const [cEmail, setCEmail] = useState("");
+  const [cPhone, setCPhone] = useState("");
+  const [cSaving, setCSaving] = useState(false);
+  const [cMsg, setCMsg] = useState<string | null>(null);
 
   const loadGmail = () =>
     fetch("/api/lms/gmail/status")
@@ -61,7 +65,36 @@ export default function SettingsPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Something went wrong."))
       .finally(() => setLoading(false));
     loadGmail();
+    fetch("/api/lms/directory")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const mine = (d.entries as { loginEmail: string; email: string; phone: string }[]).find(
+          (e) => e.loginEmail === d.me,
+        );
+        if (mine) { setCEmail(mine.email); setCPhone(mine.phone); }
+      })
+      .catch(() => {});
   }, []);
+
+  async function saveContact() {
+    setCSaving(true);
+    setCMsg(null);
+    try {
+      const r = await fetch("/api/lms/directory", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactEmail: cEmail, phone: cPhone }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || "Couldn't save.");
+      setCMsg("Saved!");
+      setTimeout(() => setCMsg(null), 2000);
+    } catch (e) {
+      setCMsg(e instanceof Error ? e.message : "Couldn't save.");
+    }
+    setCSaving(false);
+  }
 
   async function disconnectGmail(target: "personal" | "club" | "notify") {
     await fetch(`/api/lms/gmail/disconnect?target=${target}`, { method: "POST" });
@@ -122,6 +155,35 @@ export default function SettingsPage() {
                 Name, email, and roles are managed by the club and can&rsquo;t be edited here. If
                 something looks wrong, let a lead know.
               </p>
+            </div>
+
+            {/* Directory contact info (editable) */}
+            <div className="mx-auto mt-6 max-w-xl rounded-3xl border border-pine/15 bg-pine/[0.03] p-8">
+              <h2 className="font-display text-lg font-semibold text-pine-deep">Directory contact info</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                How you appear in the <a href="/dashboard/directory" className="text-pine underline">member directory</a>.
+                Editing this does <strong>not</strong> change the email you log in with.
+              </p>
+              <div className="mt-5 grid gap-4">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">Email</span>
+                  <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="you@example.com"
+                    className="mt-1.5 w-full rounded-xl border border-pine/20 px-4 py-3 text-sm outline-none focus:border-pine" />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">Phone</span>
+                  <input value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="+1 555 123 4567"
+                    className="mt-1.5 w-full rounded-xl border border-pine/20 px-4 py-3 text-sm outline-none focus:border-pine" />
+                </label>
+              </div>
+              <p className="mt-2 text-[11px] text-ink/40">Leave a field blank to reset it to your default from the club roster.</p>
+              <div className="mt-4 flex items-center gap-3">
+                <button onClick={saveContact} disabled={cSaving}
+                  className="rounded-full bg-pine px-5 py-2 text-sm font-semibold text-paper hover:bg-pine-deep disabled:opacity-60">
+                  {cSaving ? "Saving\u2026" : "Save contact info"}
+                </button>
+                {cMsg && <span className="text-sm text-pine-deep">{cMsg}</span>}
+              </div>
             </div>
 
             {/* Email sending (Gmail) */}

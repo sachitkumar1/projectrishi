@@ -30,7 +30,7 @@ type Meta = {
   allMembers: Lite[];
 };
 type EmailTemplate = { subject: string; bodyHtml: string };
-type HistoryAction = "created" | "submitted" | "approved" | "rejected" | "unmarked" | "edited";
+type HistoryAction = "created" | "submitted" | "approved" | "rejected" | "unmarked" | "edited" | "nudged";
 type HistoryEntry = { id: string; action: HistoryAction; actorEmail: string; at: string; note?: string };
 type Comment = { id: string; authorEmail: string; body: string; at: string; parentId: string | null };
 type Task = {
@@ -61,6 +61,7 @@ const HISTORY_LABEL: Record<HistoryAction, string> = {
   approved: "Approved as complete",
   rejected: "Completion rejected",
   unmarked: "Unmarked as complete",
+  nudged: "Reminder sent",
   edited: "Edited",
 };
 
@@ -102,6 +103,21 @@ const taskKind = (t: Task, email: string): "to" | "by" =>
   t.assigneeEmail.toLowerCase() === email.toLowerCase() ? "to" : "by";
 
 // ---- Full Club Overview (P/VP) ----
+type TimeWindow = "day" | "week" | "month" | "all";
+// Is an item's date within the selected window, anchored on today?
+function inTimeWindow(iso: string, window: TimeWindow): boolean {
+  if (window === "all") return true;
+  const d = new Date(iso);
+  const now = new Date();
+  if (window === "day")
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  if (window === "month")
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  // week: Sunday..Saturday containing today
+  const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(now.getDate() - now.getDay());
+  const end = new Date(start); end.setDate(start.getDate() + 7);
+  return d >= start && d < end;
+}
 type Lane = "E" | "R" | "W" | "H" | "NMT" | "OTHER";
 type OTask = Task & { lane: Lane; canManage?: boolean };
 type OEvent = ClubEvent & { lane: Lane; canManage?: boolean };
@@ -149,6 +165,8 @@ export default function LmsBoard() {
   const [detailEventId, setDetailEventId] = useState<string | null>(null);
   const [overviewOn, setOverviewOn] = useState(false);
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [ovArchive, setOvArchive] = useState<"active" | "all">("active");
+  const [ovWindow, setOvWindow] = useState<TimeWindow>("all");
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [calConnected, setCalConnected] = useState(false);
@@ -305,6 +323,24 @@ export default function LmsBoard() {
     try { await callTask(taskId, { action, ...(extra ?? {}) }); }
     catch (err) { alert((err as Error).message); }
   }
+  const [nudgeToast, setNudgeToast] = useState<string | null>(null);
+  const [nudgeLockedIds, setNudgeLockedIds] = useState<string[]>([]);
+  async function nudge(taskId: string, personName: string) {
+    if (nudgeLockedIds.includes(taskId)) return; // already nudged in the last few seconds
+    setNudgeLockedIds((ids) => [...ids, taskId]);
+    const unlock = () => setNudgeLockedIds((ids) => ids.filter((x) => x !== taskId));
+    try {
+      await api(`/api/lms/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ action: "nudge" }) });
+      const msg = `${personName} has been nudged!`;
+      setNudgeToast(msg);
+      setTimeout(() => setNudgeToast((t) => (t === msg ? null : t)), 1200); // popup auto-hides after ~1s
+      load(); // refresh so the new activity-log entry shows
+      setTimeout(unlock, 5000); // keep the button disabled ~5s to prevent spam
+    } catch (err) {
+      alert((err as Error).message);
+      unlock();
+    }
+  }
   async function archiveGroup(rows: Task[], archived: boolean) {
     try {
       await Promise.all(rows.map((r) =>
@@ -371,9 +407,18 @@ export default function LmsBoard() {
         </div>
       </div>
 
+      {overviewOn && overview && (
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <SegToggle label="Show" value={ovArchive} onChange={(v) => setOvArchive(v as "active" | "all")}
+            options={[["active", "Active"], ["all", "All"]]} />
+          <SegToggle label="Period" value={ovWindow} onChange={(v) => setOvWindow(v as TimeWindow)}
+            options={[["day", "Day"], ["week", "Week"], ["month", "Month"], ["all", "All time"]]} />
+        </div>
+      )}
+
       <div className="mt-8">
         {overviewOn && overview ? (
-          <ClubCalendar tasks={overview.tasks} events={overview.events}
+          <ClubCalendar tasks={overview.tasks} events={overview.events} archive={ovArchive} period={ovWindow}
             onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
         ) : (
           <CalendarMonth tasks={tasks} events={events} myEmail={myEmail}
@@ -468,7 +513,7 @@ export default function LmsBoard() {
       </>)}
 
       {overviewOn && overview && (
-        <ClubOverviewLists tasks={overview.tasks} events={overview.events}
+        <ClubOverviewLists tasks={overview.tasks} events={overview.events} archive={ovArchive} period={ovWindow}
           nameOf={nameOf} onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
       )}
 
@@ -501,7 +546,15 @@ export default function LmsBoard() {
           onAction={(action, extra) => act(detailTask.id, action, extra)}
           onEdit={() => { setEditingTask(detailTask); setDetailTaskId(null); }}
           onDelete={() => removeTask(detailTask.id)}
-          onComposeEmail={detailTask.emailTemplate ? () => setComposeTask(detailTask) : undefined} />
+          onComposeEmail={detailTask.emailTemplate ? () => setComposeTask(detailTask) : undefined}
+          onNudge={() => nudge(detailTask.id, nameOf(detailTask.assigneeEmail))}
+          nudgeLocked={nudgeLockedIds.includes(detailTask.id)} />
+      )}
+
+      {nudgeToast && (
+        <div className="fixed bottom-24 left-1/2 z-[1200] -translate-x-1/2 animate-in rounded-full bg-pine px-5 py-2.5 text-sm font-semibold text-paper shadow-xl">
+          {nudgeToast}
+        </div>
       )}
 
       {detailEvent && (
@@ -602,6 +655,12 @@ export default function LmsBoard() {
                   {r.canManage && r.status === "pending" && (
                     <button onClick={() => act(r.id, "approve")}
                       className="rounded-full bg-marigold px-3 py-1 text-xs font-semibold text-pine-deep">Approve</button>
+                  )}
+                  {r.canManage && r.status !== "complete" && r.assigneeEmail.toLowerCase() !== myEmail.toLowerCase() && (
+                    <button onClick={() => nudge(r.id, nameOf(r.assigneeEmail))} disabled={nudgeLockedIds.includes(r.id)}
+                      className="rounded-full border border-marigold/50 bg-marigold-soft/40 px-2 py-1 text-xs font-medium text-marigold-deep hover:bg-marigold-soft/70 disabled:cursor-not-allowed disabled:opacity-50">
+                      {nudgeLockedIds.includes(r.id) ? "Nudged" : "Nudge"}
+                    </button>
                   )}
                   {r.canManage && (
                     <button onClick={() => act(r.id, r.archived ? "unarchive" : "archive")}
@@ -755,13 +814,14 @@ function GroupCard({ group, byline, onOpen, onArchive }: { group: TaskGroup; byl
 
 // --------------------------------------------------------------- task detail popup
 function TaskDetail({
-  task, myEmail, nameOf, avatarOf, onClose, onAction, onEdit, onDelete, onComposeEmail,
+  task, myEmail, nameOf, avatarOf, onClose, onAction, onEdit, onDelete, onComposeEmail, onNudge, nudgeLocked,
 }: {
   task: Task; myEmail: string;
   nameOf: (e: string) => string; avatarOf: (e: string) => string | null;
   onClose: () => void;
   onAction: (action: string, extra?: Record<string, unknown>) => void | Promise<void>;
   onEdit: () => void; onDelete: () => void; onComposeEmail?: () => void;
+  onNudge: () => void; nudgeLocked: boolean;
 }) {
   const isAssignee = task.assigneeEmail.toLowerCase() === myEmail.toLowerCase();
   const canManage = !!task.canManage;
@@ -862,6 +922,12 @@ function TaskDetail({
           {canManage && task.status === "complete" && (
             <button disabled={busy} onClick={() => { const c = prompt("Add a comment so they know what to change (optional):") ?? ""; run("unmark", { note: c }); }}
               className="rounded-full border border-pine/25 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5 disabled:opacity-60">Unmark as complete</button>
+          )}
+          {canManage && !isAssignee && task.status !== "complete" && (
+            <button disabled={nudgeLocked} onClick={onNudge}
+              className="rounded-full border border-marigold/50 bg-marigold-soft/40 px-4 py-2 text-xs font-semibold text-marigold-deep hover:bg-marigold-soft/70 disabled:cursor-not-allowed disabled:opacity-50">
+              {nudgeLocked ? "Nudged" : "Nudge"}
+            </button>
           )}
           {canManage && task.status !== "complete" && (
             <button onClick={onEdit} className="rounded-full border border-pine/20 px-4 py-2 text-xs font-semibold text-pine-deep hover:bg-pine/5">Edit</button>
@@ -1411,11 +1477,28 @@ function EventForm({ meta, editing, onClose, onCreated }: { meta: Meta; editing?
 
 // ============================================================================
 //  Full Club Overview (P/VP only) — club-wide calendar + grouped lists
+function SegToggle({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: [string, string][];
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">{label}</span>
+      <div className="inline-flex rounded-full border border-pine/20 bg-paper p-0.5">
+        {options.map(([val, lbl]) => (
+          <button key={val} onClick={() => onChange(val)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${value === val ? "bg-pine text-paper" : "text-pine-deep hover:bg-pine/5"}`}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 // ============================================================================
 function laneOfTask(t: OTask): Lane { return t.lane; }
 
-function ClubCalendar({ tasks, events, onOpenTask, onOpenEvent }: {
-  tasks: OTask[]; events: OEvent[];
+function ClubCalendar({ tasks, events, archive, period, onOpenTask, onOpenEvent }: {
+  tasks: OTask[]; events: OEvent[]; archive: "active" | "all"; period: TimeWindow;
   onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void;
 }) {
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
@@ -1430,8 +1513,8 @@ function ClubCalendar({ tasks, events, onOpenTask, onOpenEvent }: {
   while (cells.length % 7 !== 0) cells.push(null);
   const today = new Date();
 
-  const liveTasks = tasks.filter((t) => !t.archived);
-  const liveEvents = events.filter((e) => !e.archived);
+  const liveTasks = tasks.filter((t) => (archive === "all" || !t.archived) && inTimeWindow(t.dueAt, period));
+  const liveEvents = events.filter((e) => (archive === "all" || !e.archived) && inTimeWindow(e.startAt, period));
   const dayTasks = (date: Date) => liveTasks.filter((t) => sameDay(new Date(t.dueAt), date));
   const dayEvents = (date: Date) => liveEvents.filter((e) => sameDay(new Date(e.startAt), date));
 
@@ -1520,19 +1603,24 @@ function ClubCalendar({ tasks, events, onOpenTask, onOpenEvent }: {
   );
 }
 
-function ClubOverviewLists({ tasks, events, nameOf, onOpenTask, onOpenEvent }: {
-  tasks: OTask[]; events: OEvent[]; nameOf: (e: string) => string;
+function ClubOverviewLists({ tasks, events, archive, period, nameOf, onOpenTask, onOpenEvent }: {
+  tasks: OTask[]; events: OEvent[]; archive: "active" | "all"; period: TimeWindow;
+  nameOf: (e: string) => string;
   onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void;
 }) {
-  const groups = groupByBatch(tasks);
+  const fTasks = tasks.filter((t) => (archive === "all" || !t.archived) && inTimeWindow(t.dueAt, period));
+  const fEvents = events.filter((e) => (archive === "all" || !e.archived) && inTimeWindow(e.startAt, period));
+  const groups = groupByBatch(fTasks);
+  const nothing = groups.length === 0 && fEvents.length === 0;
   return (
     <div className="mt-10">
       <h3 className="font-display text-2xl font-semibold text-pine-deep">Full Club Overview</h3>
-      <p className="mt-1 text-sm text-ink/55">Every task and event in the club, present and archived, grouped by project / role. You can only act on items you created yourself.</p>
+      <p className="mt-1 text-sm text-ink/55">Club-wide tasks and events grouped by project / role. Use the toggles above to switch between active-only and everything, and to narrow the time period. You can only act on items you created yourself.</p>
+      {nothing && <p className="mt-6 text-sm text-ink/45">Nothing matches the selected filters.</p>}
       <div className="mt-6 space-y-8">
         {LANE_ORDER.map((lane) => {
           const laneGroups = groups.filter((g) => laneOfTask(g.head as OTask) === lane);
-          const laneEvents = events.filter((e) => e.lane === lane);
+          const laneEvents = fEvents.filter((e) => e.lane === lane);
           if (laneGroups.length === 0 && laneEvents.length === 0) return null;
           const c = LANE_COLOR[lane];
           return (

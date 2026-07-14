@@ -43,7 +43,8 @@ export type TaskHistoryAction =
   | "approved"
   | "rejected"
   | "unmarked"
-  | "edited";
+  | "edited"
+  | "nudged";
 export type TaskHistoryEntry = {
   id: string;
   action: TaskHistoryAction;

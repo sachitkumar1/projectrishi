@@ -2,7 +2,7 @@
 //  Notify — task/event emails + in-dashboard notifications
 // ----------------------------------------------------------------------------
 //  One place that owns every templated message in the spec. Each call sends an
-//  email FROM the club account (ucberkeley@projectrishi.org) AND writes a
+//  email FROM the notifications account (projectrishiucberkeley@gmail.com) AND writes a
 //  matching notification (title = subject, body = body) so the dashboard bell
 //  shows it too. Everything here is best-effort: a delivery failure is logged
 //  but never breaks the task/event action that triggered it.
@@ -68,10 +68,10 @@ async function notify(
   } catch (e) {
     console.error("notify: notification write failed", (e as Error).message);
   }
-  // Email from the shared club account.
+  // Email from the club notifications account.
   try {
     const conn = await getGmailConnection(NOTIFY_SENDER);
-    if (!conn) return; // club Gmail not connected yet — notification still delivered
+    if (!conn) return; // notifications Gmail not connected yet — notification still delivered
     const fromEmail = conn.connectedGoogleEmail ?? conn.accountEmail;
     await sendViaConnection(conn, {
       fromEmail,
@@ -172,6 +172,26 @@ export async function notifyTaskArchived(task: Task, actorEmail: string): Promis
 }
 
 /** Reminder (cron) → email/notify the doer. `phrase` like "in 3 days" / "by 2 days". */
+/**
+ * A manual "Nudge" from an assigner/co-lead to one assignee: a personal reminder
+ * email (and dashboard notification) that shows how long until the task is due,
+ * or how long it's been overdue.
+ */
+export async function notifyTaskNudge(task: Task, nudgerEmail: string): Promise<void> {
+  const nudger = nameOf(nudgerEmail);
+  const ms = new Date(task.dueAt).getTime() - Date.now();
+  const overdue = ms < 0;
+  const abs = Math.abs(ms);
+  const days = Math.floor(abs / 86_400_000);
+  const hours = Math.floor((abs % 86_400_000) / 3_600_000);
+  const timing = overdue
+    ? `It is past due by ${days} days and ${hours} hours.`
+    : `It is due in ${days} days and ${hours} hours.`;
+  const subject = `Reminder to complete: ${task.title}`;
+  const body = `${nudger} is reminding you to complete the task ${task.title}. ${timing}`;
+  await notify(task.assigneeEmail, subject, body, "task_nudge", task.id);
+}
+
 export async function notifyTaskReminder(
   task: Task,
   state: "due" | "past due",

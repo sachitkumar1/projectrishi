@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
 import { findMember, memberFullName } from "@/lib/members";
-import { getChat, isChatMember, listMessages, sendMessage } from "@/lib/lms/chat";
+import { getChat, hideChatForUser, isChatMember, listMessages, sendMessage } from "@/lib/lms/chat";
 import { sendPushToUser } from "@/lib/lms/push";
 
 export const dynamic = "force-dynamic";
@@ -53,4 +53,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   return NextResponse.json({ message });
+}
+
+// Delete the conversation for the current member only (hides it from their list).
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const me = await getCurrentMember();
+  if (!me) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+  if (!(await isChatMember(params.id, me.email)))
+    return NextResponse.json({ error: "Not your chat." }, { status: 403 });
+  await hideChatForUser(params.id, me.email);
+  return NextResponse.json({ ok: true });
 }

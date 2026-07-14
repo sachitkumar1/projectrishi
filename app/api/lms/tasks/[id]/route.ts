@@ -12,6 +12,7 @@ import {
 import {
   addTaskComment,
   approveTask,
+  nudgeTask,
   deleteTask,
   editTaskGroup,
   getTask,
@@ -27,10 +28,12 @@ import {
   notifyTaskArchived,
   notifyTaskAssigned,
   notifyTaskDeleted,
+  notifyTaskNudge,
   notifyTaskRejected,
   notifyTaskSubmitted,
   notifyTaskUnmarked,
 } from "@/lib/lms/notify";
+import type { Task } from "@/lib/lms/types";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +42,37 @@ const trimOrNull = (v: unknown) => {
   const s = str(v).trim();
   return s ? s : null;
 };
+
+/**
+ * Auto-archive on approval, per the club's rules:
+ *  - When every assignee on a task is approved complete, the whole task
+ *    archives (so it leaves the assigner's active board and everyone's calendar).
+ *  - Before that, each assignee's own row archives as soon as THEIR row is
+ *    approved complete — EXCEPT for an assignee who is also a manager of the
+ *    task (the assigner or a co-lead/co-NMT peer). Their row is held unarchived
+ *    until everyone is done, so the task stays active on the manager's side.
+ * Taking an approval back (unmark) simply re-runs this and unarchives as needed.
+ * Idempotent: it only flips the archived flag when it actually needs to change,
+ * and never emails (unlike the manual archive action).
+ */
+async function syncGroupArchive(task: Task): Promise<void> {
+  let rows = task.groupId ? await getTasksByGroup(task.groupId) : [];
+  if (rows.length === 0) {
+    const fresh = await getTask(task.id);
+    rows = fresh ? [fresh] : [];
+  }
+  if (rows.length === 0) return;
+
+  const allComplete = rows.every((r) => r.status === "complete");
+  await Promise.all(
+    rows.map(async (r) => {
+      const assignee = findMember(r.assigneeEmail);
+      const assigneeIsManager = assignee ? canManageTask(assignee, r) : false;
+      const desired = allComplete ? true : r.status === "complete" && !assigneeIsManager;
+      if (r.archived !== desired) await setTaskArchived(r.id, desired);
+    }),
+  );
+}
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const me = await getCurrentMember();
@@ -81,6 +115,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const updated = await approveTask(task, me.email);
     if (task.assigneeEmail.toLowerCase() !== me.email.toLowerCase())
       await notifyTaskApproved(updated, me.email).catch(() => {});
+    await syncGroupArchive(updated).catch(() => {});
     return NextResponse.json({ task: updated });
   }
 
@@ -105,6 +140,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // Only email the doer when someone ELSE unmarked it (per spec).
     if (task.assigneeEmail.toLowerCase() !== me.email.toLowerCase())
       await notifyTaskUnmarked(updated, me.email, note).catch(() => {});
+    await syncGroupArchive(updated).catch(() => {});
     return NextResponse.json({ task: updated });
   }
 
@@ -122,6 +158,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   // ---- archive / unarchive ----
+  // ---- nudge: a manager sends a personal reminder email to the assignee ----
+  if (body.action === "nudge") {
+    if (!canManageTask(me, task))
+      return NextResponse.json({ error: "You can't nudge this task." }, { status: 403 });
+    await notifyTaskNudge(task, me.email).catch(() => {});
+    const logged = await nudgeTask(task, me.email);
+    return NextResponse.json({ ok: true, task: logged });
+  }
+
   if (body.action === "archive" || body.action === "unarchive") {
     if (!canManageTask(me, task))
       return NextResponse.json({ error: "You can't archive this task." }, { status: 403 });

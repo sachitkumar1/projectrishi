@@ -68,7 +68,9 @@ const msgFromRow = (r: any): ChatMessage => ({
 const mem = {
   chats: [] as Chat[],
   messages: [] as ChatMessage[],
+  hidden: new Map<string, string>(), // `${chatId}|${email}` -> hiddenAt ISO
 };
+const hiddenKey = (chatId: string, email: string) => `${chatId}|${lc(email)}`;
 
 const sameMembers = (a: string[], b: string[]) => {
   const sa = new Set(a.map(lc));
@@ -83,7 +85,7 @@ export async function listChats(email: string): Promise<ChatSummary[]> {
   const me = lc(email);
   if (usingSupabase) {
     const { data: memRows, error: e1 } = await sb()
-      .from("lms_chat_members").select("chat_id").eq("email", me);
+      .from("lms_chat_members").select("chat_id,hidden_at").eq("email", me);
     if (e1) throw new Error(e1.message);
     const ids = (memRows ?? []).map((r) => r.chat_id);
     if (ids.length === 0) return [];
@@ -106,14 +108,22 @@ export async function listChats(email: string): Promise<ChatSummary[]> {
     for (const m of msgs ?? []) {
       if (!lastByChat.has(m.chat_id)) lastByChat.set(m.chat_id, { body: m.body, at: m.created_at });
     }
-    const out: ChatSummary[] = (chatRows ?? []).map((r) => {
-      const last = lastByChat.get(r.id);
-      return {
-        ...chatFromRow(r, membersByChat.get(r.id) ?? []),
-        lastMessage: last?.body ?? null,
-        lastAt: last?.at ?? null,
-      };
-    });
+    const hiddenByChat = new Map<string, string | null>();
+    for (const r of memRows ?? []) hiddenByChat.set(r.chat_id, (r as { hidden_at?: string | null }).hidden_at ?? null);
+    const out: ChatSummary[] = (chatRows ?? [])
+      .map((r) => {
+        const last = lastByChat.get(r.id);
+        return {
+          ...chatFromRow(r, membersByChat.get(r.id) ?? []),
+          lastMessage: last?.body ?? null,
+          lastAt: last?.at ?? null,
+        };
+      })
+      // Drop chats the member has deleted for themselves, UNLESS a newer message arrived since.
+      .filter((c) => {
+        const h = hiddenByChat.get(c.id);
+        return !h || (c.lastAt !== null && c.lastAt > h);
+      });
     return out.sort((a, b) => (b.lastAt ?? b.createdAt).localeCompare(a.lastAt ?? a.createdAt));
   }
 
@@ -123,6 +133,10 @@ export async function listChats(email: string): Promise<ChatSummary[]> {
       const msgs = mem.messages.filter((m) => m.chatId === c.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       const last = msgs[0];
       return { ...c, lastMessage: last?.body ?? null, lastAt: last?.createdAt ?? null };
+    })
+    .filter((c) => {
+      const h = mem.hidden.get(hiddenKey(c.id, me));
+      return !h || (c.lastAt !== null && c.lastAt > h);
     })
     .sort((a, b) => (b.lastAt ?? b.createdAt).localeCompare(a.lastAt ?? a.createdAt));
 }
@@ -166,7 +180,7 @@ export async function createChat(
   // A 1:1 chat is deduped so you never get two DMs with the same person.
   if (!opts.isGroup && members.length === 2) {
     const existing = await findDM(members[0], members[1]);
-    if (existing) return existing;
+    if (existing) { await clearHiddenForUser(existing.id, creator).catch(() => {}); return existing; }
   }
   const chat: Chat = {
     id: uid(),
@@ -188,6 +202,23 @@ export async function createChat(
   }
   mem.chats.push(chat);
   return chat;
+}
+
+/** Delete a conversation for one member only (hides it from their list). */
+export async function hideChatForUser(chatId: string, email: string): Promise<void> {
+  if (usingSupabase) {
+    await sb().from("lms_chat_members").update({ hidden_at: now() }).eq("chat_id", chatId).eq("email", lc(email));
+    return;
+  }
+  mem.hidden.set(hiddenKey(chatId, email), now());
+}
+
+async function clearHiddenForUser(chatId: string, email: string): Promise<void> {
+  if (usingSupabase) {
+    await sb().from("lms_chat_members").update({ hidden_at: null }).eq("chat_id", chatId).eq("email", lc(email));
+    return;
+  }
+  mem.hidden.delete(hiddenKey(chatId, email));
 }
 
 // ----------------------------------------------------------------- messages
