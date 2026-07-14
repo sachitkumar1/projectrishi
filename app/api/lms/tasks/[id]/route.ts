@@ -34,6 +34,7 @@ import {
   notifyTaskUnmarked,
 } from "@/lib/lms/notify";
 import type { Task } from "@/lib/lms/types";
+import { syncTasksIfRealtime } from "@/lib/lms/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,16 @@ const trimOrNull = (v: unknown) => {
   const s = str(v).trim();
   return s ? s : null;
 };
+
+/**
+ * Respond to a task mutation, mirroring the change into the task Google Sheet
+ * first (real-time mode only — otherwise the hourly cron picks it up). The sync
+ * never throws, so a Sheets problem can't fail the action itself.
+ */
+async function syncedJson(payload: unknown, init?: { status?: number }) {
+  await syncTasksIfRealtime();
+  return NextResponse.json(payload, init);
+}
 
 /**
  * Auto-archive on approval, per the club's rules:
@@ -105,7 +116,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!task.assigneeEmail || task.assignerEmail.toLowerCase() !== task.assigneeEmail.toLowerCase()) {
       await notifyTaskSubmitted(updated, note).catch(() => {});
     }
-    return NextResponse.json({ task: updated });
+    return syncedJson({ task: updated });
   }
 
   // ---- manager approves ----
@@ -116,7 +127,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (task.assigneeEmail.toLowerCase() !== me.email.toLowerCase())
       await notifyTaskApproved(updated, me.email).catch(() => {});
     await syncGroupArchive(updated).catch(() => {});
-    return NextResponse.json({ task: updated });
+    return syncedJson({ task: updated });
   }
 
   // ---- manager rejects a pending submission (with optional comment) ----
@@ -127,7 +138,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     let updated = await rejectTask(task, me.email, note);
     if (note) updated = await addTaskComment(updated, me.email, note, null);
     await notifyTaskRejected(updated, me.email, note).catch(() => {});
-    return NextResponse.json({ task: updated });
+    return syncedJson({ task: updated });
   }
 
   // ---- unmark complete: doer (changed mind) or manager (with optional note) ----
@@ -141,7 +152,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (task.assigneeEmail.toLowerCase() !== me.email.toLowerCase())
       await notifyTaskUnmarked(updated, me.email, note).catch(() => {});
     await syncGroupArchive(updated).catch(() => {});
-    return NextResponse.json({ task: updated });
+    return syncedJson({ task: updated });
   }
 
   // ---- comment / reply (either party) ----
@@ -154,7 +165,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!text) return NextResponse.json({ error: "Comment can't be empty." }, { status: 400 });
     const parentId = trimOrNull(body.parentId);
     const updated = await addTaskComment(task, me.email, text, parentId);
-    return NextResponse.json({ task: updated });
+    return syncedJson({ task: updated });
   }
 
   // ---- archive / unarchive ----
@@ -164,7 +175,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return NextResponse.json({ error: "You can't nudge this task." }, { status: 403 });
     await notifyTaskNudge(task, me.email).catch(() => {});
     const logged = await nudgeTask(task, me.email);
-    return NextResponse.json({ ok: true, task: logged });
+    return syncedJson({ ok: true, task: logged });
   }
 
   if (body.action === "archive" || body.action === "unarchive") {
@@ -173,7 +184,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const updated = await setTaskArchived(task.id, body.action === "archive");
     if (body.action === "archive" && task.assigneeEmail.toLowerCase() !== me.email.toLowerCase())
       await notifyTaskArchived(updated, me.email).catch(() => {});
-    return NextResponse.json({ task: updated });
+    return syncedJson({ task: updated });
   }
 
   // ---- edit the WHOLE task group (shared fields + add/remove assignees) ----
@@ -218,7 +229,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     });
     // Email any newly-added assignees just like a fresh assignment.
     await Promise.allSettled(added.map((t) => notifyTaskAssigned(t)));
-    return NextResponse.json({ ok: true, added: added.length });
+    return syncedJson({ ok: true, added: added.length });
   }
 
   // ---- edit ----
@@ -256,7 +267,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       assigneeEmail,
       emailTemplate,
     });
-    return NextResponse.json({ task: updated });
+    return syncedJson({ task: updated });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
@@ -272,5 +283,5 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (task.assigneeEmail.toLowerCase() !== me.email.toLowerCase())
     await notifyTaskDeleted(task, me.email).catch(() => {});
   await deleteTask(task.id);
-  return NextResponse.json({ ok: true });
+  return syncedJson({ ok: true });
 }

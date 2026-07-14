@@ -3,6 +3,7 @@ import { getCurrentMember } from "@/lib/lms/currentUser";
 import { canSeeMember, findMember, MEMBERS } from "@/lib/members";
 import { canAssignTasks, canAssignTaskTo, canManageTask } from "@/lib/lms/permissions";
 import { createTasks, listTasksForMember } from "@/lib/lms/store";
+import { syncTasksIfRealtime } from "@/lib/lms/sheets";
 import { notifyTaskAssigned } from "@/lib/lms/notify";
 import type { NewTaskInput, Task } from "@/lib/lms/types";
 
@@ -79,5 +80,7 @@ export async function POST(req: Request) {
   // Email + notify each assignee that a task was created for them (best-effort).
   await Promise.allSettled(created.map((t) => notifyTaskAssigned(t)));
 
+  // Mirror the new task(s) into the task Google Sheet (real-time mode only).
+  await syncTasksIfRealtime();
   return NextResponse.json({ tasks: created }, { status: 201 });
 }
