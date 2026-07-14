@@ -23,9 +23,6 @@ function laneFor(email: string): Lane {
 export async function GET() {
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
-  // Full Club Overview is a VP / President-only view.
-  if (!me.roles.vpp) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-
   const [tasks, events] = await Promise.all([listAllTasks(), listAllEvents()]);
 
   const tasksOut = tasks.map((t) => ({

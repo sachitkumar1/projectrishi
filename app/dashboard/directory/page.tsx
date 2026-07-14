@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Contours from "@/components/Contours";
+import { formatPhoneInput } from "@/lib/lms/phone";
 
 type Entry = { loginEmail: string; name: string; role: string; group: string; email: string; phone: string };
 
@@ -168,7 +169,7 @@ export default function DirectoryPage() {
             </label>
             <label className="mt-3 block">
               <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">Phone</span>
-              <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+1 555 123 4567"
+              <input value={editPhone} onChange={(e) => setEditPhone(formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"
                 className="mt-1.5 w-full rounded-xl border border-pine/20 px-4 py-2.5 text-sm outline-none focus:border-pine" />
             </label>
             <p className="mt-2 text-[11px] text-ink/40">Leave a field blank to reset it to your default from the club roster.</p>

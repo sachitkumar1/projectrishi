@@ -10,6 +10,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { MEMBERS, memberFullName, memberRoleLabel } from "@/lib/members";
 import { PROJECT_GROUP_LABELS } from "@/lib/lms/types";
+import { formatPhone } from "@/lib/lms/phone";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -100,7 +101,7 @@ export async function listDirectory(): Promise<DirectoryEntry[]> {
         role: memberRoleLabel(m),
         group: PROJECT_GROUP_LABELS[m.group],
         email: o?.contactEmail ?? m.email,
-        phone: o?.phone ?? m.phone ?? "",
+        phone: formatPhone(o?.phone ?? m.phone ?? ""),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

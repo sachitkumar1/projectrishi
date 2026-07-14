@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/lms/currentUser";
 import { getContactOverride, listDirectory, setContactOverride } from "@/lib/lms/directory";
+import { formatPhone } from "@/lib/lms/phone";
+import { syncDirectoryToSheet } from "@/lib/lms/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +35,10 @@ export async function PUT(req: Request) {
   if (body.phone !== undefined && body.phone.trim().length > 40)
     return NextResponse.json({ error: "Phone number is too long." }, { status: 400 });
 
-  await setContactOverride(me.email, { contactEmail: body.contactEmail, phone: body.phone });
+  const phone = body.phone !== undefined ? formatPhone(body.phone) : undefined;
+  await setContactOverride(me.email, { contactEmail: body.contactEmail, phone });
   const override = await getContactOverride(me.email);
+  // Mirror the updated directory into the Google Sheet (best-effort).
+  await syncDirectoryToSheet().catch(() => {});
   return NextResponse.json({ ok: true, override });
 }

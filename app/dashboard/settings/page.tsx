@@ -1,5 +1,7 @@
 "use client";
 
+import { formatPhoneInput } from "@/lib/lms/phone";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Reveal from "@/components/Reveal";
@@ -172,7 +174,7 @@ export default function SettingsPage() {
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">Phone</span>
-                  <input value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="+1 555 123 4567"
+                  <input value={cPhone} onChange={(e) => setCPhone(formatPhoneInput(e.target.value))} placeholder="(555) 123-4567"
                     className="mt-1.5 w-full rounded-xl border border-pine/20 px-4 py-3 text-sm outline-none focus:border-pine" />
                 </label>
               </div>

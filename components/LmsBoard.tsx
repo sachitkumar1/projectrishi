@@ -118,6 +118,23 @@ function inTimeWindow(iso: string, window: TimeWindow): boolean {
   const end = new Date(start); end.setDate(start.getDate() + 7);
   return d >= start && d < end;
 }
+// An event has "passed" once its end (or start, if no end) is in the past.
+function eventHasPassed(e: { startAt: string; endAt?: string | null; allDay?: boolean }): boolean {
+  const end = new Date(e.endAt || e.startAt);
+  if (e.allDay) { end.setHours(23, 59, 59, 999); }
+  return end.getTime() < Date.now();
+}
+// "Active" = outstanding. A task is outstanding until it's complete or archived;
+// an event is outstanding until it has passed or been archived. "All" = no filter.
+// Both are additionally constrained to the selected time window.
+function taskPasses(t: { archived: boolean; status: string; dueAt: string }, archive: "active" | "all", period: TimeWindow): boolean {
+  const outstanding = !t.archived && t.status !== "complete";
+  return (archive === "all" || outstanding) && inTimeWindow(t.dueAt, period);
+}
+function eventPasses(e: { archived: boolean; startAt: string; endAt?: string | null; allDay?: boolean }, archive: "active" | "all", period: TimeWindow): boolean {
+  const outstanding = !e.archived && !eventHasPassed(e);
+  return (archive === "all" || outstanding) && inTimeWindow(e.startAt, period);
+}
 type Lane = "E" | "R" | "W" | "H" | "NMT" | "OTHER";
 type OTask = Task & { lane: Lane; canManage?: boolean };
 type OEvent = ClubEvent & { lane: Lane; canManage?: boolean };
@@ -167,6 +184,8 @@ export default function LmsBoard() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [ovArchive, setOvArchive] = useState<"active" | "all">("active");
   const [ovWindow, setOvWindow] = useState<TimeWindow>("all");
+  const [myArchive, setMyArchive] = useState<"active" | "all">("active");
+  const [myWindow, setMyWindow] = useState<TimeWindow>("all");
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [calConnected, setCalConnected] = useState(false);
@@ -255,24 +274,24 @@ export default function LmsBoard() {
     [tasks, myEmail]
   );
   const activeToMe = useMemo(
-    () => assignedToMe.filter((t) => t.status !== "complete" && !t.archived),
-    [assignedToMe]
+    () => assignedToMe.filter((t) => taskPasses(t, myArchive, myWindow)).sort((a, b) => a.dueAt.localeCompare(b.dueAt)),
+    [assignedToMe, myArchive, myWindow]
   );
   const activeByMeGroups = useMemo(() => {
     const rows = tasks.filter(
       (t) => t.assignerEmail.toLowerCase() === myEmail.toLowerCase()
         && t.assigneeEmail.toLowerCase() !== myEmail.toLowerCase()
     );
-    return groupByBatch(rows).filter((g) => g.rows.some((r) => r.status !== "complete" && !r.archived));
-  }, [tasks, myEmail]);
+    return groupByBatch(rows).filter((g) => g.rows.some((r) => taskPasses(r, myArchive, myWindow)));
+  }, [tasks, myEmail, myArchive, myWindow]);
   // Tasks assigned by my CO-LEADS / CO-NMT to other people (visible via shared control).
   const coLeadGroups = useMemo(() => {
     const rows = tasks.filter(
       (t) => t.assignerEmail.toLowerCase() !== myEmail.toLowerCase()
         && t.assigneeEmail.toLowerCase() !== myEmail.toLowerCase()
     );
-    return groupByBatch(rows).filter((g) => g.rows.some((r) => r.status !== "complete" && !r.archived));
-  }, [tasks, myEmail]);
+    return groupByBatch(rows).filter((g) => g.rows.some((r) => taskPasses(r, myArchive, myWindow)));
+  }, [tasks, myEmail, myArchive, myWindow]);
   const pastTaskGroups = useMemo(
     () => groupByBatch(tasks)
       .filter((g) => g.rows.every((r) => r.status === "complete" || r.archived))
@@ -281,12 +300,14 @@ export default function LmsBoard() {
   );
   const pastTaskCount = useMemo(() => pastTaskGroups.reduce((n, g) => n + g.rows.length, 0), [pastTaskGroups]);
 
-  const { upcomingEvents, pastEvents } = useMemo(() => {
-    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-    const up = events.filter((e) => !e.archived && new Date(e.startAt) >= t0).sort((a, b) => a.startAt.localeCompare(b.startAt));
-    const pa = events.filter((e) => e.archived || new Date(e.startAt) < t0).sort((a, b) => b.startAt.localeCompare(a.startAt));
-    return { upcomingEvents: up, pastEvents: pa };
-  }, [events]);
+  const upcomingEvents = useMemo(
+    () => events.filter((e) => eventPasses(e, myArchive, myWindow)).sort((a, b) => a.startAt.localeCompare(b.startAt)),
+    [events, myArchive, myWindow]
+  );
+  const pastEvents = useMemo(
+    () => events.filter((e) => e.archived || eventHasPassed(e)).sort((a, b) => b.startAt.localeCompare(a.startAt)),
+    [events]
+  );
 
   const openGroupRows = useMemo(
     () => (openGroupKey ? tasks.filter((t) => (t.groupId || t.id) === openGroupKey) : []),
@@ -391,12 +412,10 @@ export default function LmsBoard() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        {meta.me.roles.vpp ? (
-          <button onClick={() => setOverviewOn((v) => !v)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${overviewOn ? "bg-pine text-paper" : "border border-pine/25 text-pine-deep hover:bg-pine/5"}`}>
-            {overviewOn ? "✓ Full Club Overview" : "Full Club Overview"}
-          </button>
-        ) : <span />}
+        <button onClick={() => setOverviewOn((v) => !v)}
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${overviewOn ? "bg-pine text-paper" : "border border-pine/25 text-pine-deep hover:bg-pine/5"}`}>
+          {overviewOn ? "✓ Full Club Overview" : "Full Club Overview"}
+        </button>
         <div className="flex gap-2">
           {meta.can.assignTasks && (
             <button onClick={() => setShowTaskForm(true)} className="btn-primary text-sm">+ Assign task</button>
@@ -416,12 +435,21 @@ export default function LmsBoard() {
         </div>
       )}
 
+      {!overviewOn && (
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <SegToggle label="Show" value={myArchive} onChange={(v) => setMyArchive(v as "active" | "all")}
+            options={[["active", "Active"], ["all", "All"]]} />
+          <SegToggle label="Period" value={myWindow} onChange={(v) => setMyWindow(v as TimeWindow)}
+            options={[["day", "Day"], ["week", "Week"], ["month", "Month"], ["all", "All time"]]} />
+        </div>
+      )}
+
       <div className="mt-8">
         {overviewOn && overview ? (
           <ClubCalendar tasks={overview.tasks} events={overview.events} archive={ovArchive} period={ovWindow}
             onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
         ) : (
-          <CalendarMonth tasks={tasks} events={events} myEmail={myEmail}
+          <CalendarMonth tasks={tasks} events={events} myEmail={myEmail} archive={myArchive} period={myWindow}
             onOpenTask={(id) => setDetailTaskId(id)} onOpenEvent={(id) => setDetailEventId(id)} />
         )}
       </div>
@@ -501,7 +529,7 @@ export default function LmsBoard() {
         </section>
 
         <section>
-          <h3 className="font-display text-xl font-semibold text-pine-deep">Upcoming events</h3>
+          <h3 className="font-display text-xl font-semibold text-pine-deep">Events</h3>
           <div className="mt-4 space-y-3">
             {upcomingEvents.length === 0 && <Empty>No upcoming events.</Empty>}
             {upcomingEvents.map((e) => (
@@ -1036,8 +1064,8 @@ function EventDetail({
 }
 
 // --------------------------------------------------------------------- calendar
-function CalendarMonth({ tasks, events, myEmail, onOpenTask, onOpenEvent }: {
-  tasks: Task[]; events: ClubEvent[]; myEmail: string;
+function CalendarMonth({ tasks, events, myEmail, archive, period, onOpenTask, onOpenEvent }: {
+  tasks: Task[]; events: ClubEvent[]; myEmail: string; archive: "active" | "all"; period: TimeWindow;
   onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void;
 }) {
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
@@ -1053,8 +1081,8 @@ function CalendarMonth({ tasks, events, myEmail, onOpenTask, onOpenEvent }: {
   while (cells.length % 7 !== 0) cells.push(null);
   const today = new Date();
 
-  const myTasks = tasks.filter((t) => !t.archived && t.assigneeEmail.toLowerCase() === myEmail.toLowerCase());
-  const liveEvents = events.filter((e) => !e.archived);
+  const myTasks = tasks.filter((t) => t.assigneeEmail.toLowerCase() === myEmail.toLowerCase() && taskPasses(t, archive, period));
+  const liveEvents = events.filter((e) => eventPasses(e, archive, period));
   const dayTasksFor = (date: Date) => myTasks.filter((t) => sameDay(new Date(t.dueAt), date));
   const dayEventsFor = (date: Date) => liveEvents.filter((e) => sameDay(new Date(e.startAt), date));
 
@@ -1513,8 +1541,8 @@ function ClubCalendar({ tasks, events, archive, period, onOpenTask, onOpenEvent 
   while (cells.length % 7 !== 0) cells.push(null);
   const today = new Date();
 
-  const liveTasks = tasks.filter((t) => (archive === "all" || !t.archived) && inTimeWindow(t.dueAt, period));
-  const liveEvents = events.filter((e) => (archive === "all" || !e.archived) && inTimeWindow(e.startAt, period));
+  const liveTasks = tasks.filter((t) => taskPasses(t, archive, period));
+  const liveEvents = events.filter((e) => eventPasses(e, archive, period));
   const dayTasks = (date: Date) => liveTasks.filter((t) => sameDay(new Date(t.dueAt), date));
   const dayEvents = (date: Date) => liveEvents.filter((e) => sameDay(new Date(e.startAt), date));
 
@@ -1608,8 +1636,8 @@ function ClubOverviewLists({ tasks, events, archive, period, nameOf, onOpenTask,
   nameOf: (e: string) => string;
   onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void;
 }) {
-  const fTasks = tasks.filter((t) => (archive === "all" || !t.archived) && inTimeWindow(t.dueAt, period));
-  const fEvents = events.filter((e) => (archive === "all" || !e.archived) && inTimeWindow(e.startAt, period));
+  const fTasks = tasks.filter((t) => taskPasses(t, archive, period));
+  const fEvents = events.filter((e) => eventPasses(e, archive, period));
   const groups = groupByBatch(fTasks);
   const nothing = groups.length === 0 && fEvents.length === 0;
   return (
