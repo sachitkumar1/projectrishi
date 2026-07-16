@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { syncDirectoryToSheet, syncTasksToSheet } from "@/lib/lms/sheets";
+import { pullRosterFromSheet, pushRosterToSheet, syncDirectoryToSheet, syncTasksToSheet } from "@/lib/lms/sheets";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,9 +26,25 @@ function authorized(req: Request): boolean {
 async function run(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "Forbidden" }, { status: 401 });
   const started = Date.now();
-  await syncTasksToSheet();
-  await syncDirectoryToSheet();
-  return NextResponse.json({ ok: true, ms: Date.now() - started });
+
+  // 1) Sheet → site. Do this FIRST so roster edits land before anything is
+  //    pushed back. Only push the normalized roster back if the pull succeeded,
+  //    otherwise we'd overwrite someone's in-progress edits with stale data.
+  const rosterIn = await pullRosterFromSheet();
+  const rosterOut = rosterIn.ok ? await pushRosterToSheet() : { ok: false, skipped: "skipped — pull failed" };
+
+  // 2) Site → sheets.
+  const tasks = await syncTasksToSheet();
+  const directory = await syncDirectoryToSheet();
+
+  return NextResponse.json({
+    ok: tasks.ok && directory.ok && rosterIn.ok,
+    ms: Date.now() - started,
+    rosterPull: rosterIn,
+    rosterPush: rosterOut,
+    tasks,
+    directory,
+  });
 }
 
 export async function GET(req: Request) {

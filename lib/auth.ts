@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { findMember } from "@/lib/members";
+import { ensureRoster } from "@/lib/lms/roster";
 
 /**
  * Login uses ONLY basic, non-sensitive scopes (email/profile), so members get
@@ -22,9 +23,13 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async signIn({ user }) {
+      // Load the sheet-backed roster first, so someone added in the Google Sheet
+      // can log in immediately without a code change or redeploy.
+      await ensureRoster();
       return Boolean(findMember(user.email));
     },
     async jwt({ token }) {
+      await ensureRoster();
       const member = findMember(token.email);
       if (member) {
         token.firstName = member.firstName;

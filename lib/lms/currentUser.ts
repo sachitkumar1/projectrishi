@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { findMember, type Member } from "@/lib/members";
+import { ensureRoster } from "@/lib/lms/roster";
 
 /**
  * Resolve the currently logged-in member (with roles) on the server.
@@ -11,6 +12,8 @@ import { findMember, type Member } from "@/lib/members";
  * without logging in. It does nothing in production unless the env var is set.
  */
 export async function getCurrentMember(): Promise<Member | null> {
+  // Keep the live roster fresh so sheet edits take effect without a redeploy.
+  await ensureRoster();
   let email: string | null = null;
   try {
     const session = await getServerSession(authOptions);
@@ -19,5 +22,20 @@ export async function getCurrentMember(): Promise<Member | null> {
     email = null;
   }
   email = email ?? process.env.LMS_PREVIEW_EMAIL ?? null;
-  return findMember(email) ?? null;
+  const member = findMember(email) ?? null;
+  if (!member) return null;
+
+  // The Webmaster implicitly holds every capability on the site. We expand the
+  // flags HERE — the single point every permission check flows through — rather
+  // than storing them expanded, so the roster/sheet/directory keep showing the
+  // person's real, honest roles.
+  if (!member.roles.webmaster) return member;
+  return {
+    ...member,
+    roles: {
+      ...member.roles,
+      nmtLeader: true, newbie: true, lead: true,
+      internal: true, vpp: true, exec: true, outreach: true,
+    },
+  };
 }

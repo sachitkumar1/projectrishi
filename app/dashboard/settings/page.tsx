@@ -49,6 +49,11 @@ export default function SettingsPage() {
   const [cPhone, setCPhone] = useState("");
   const [cSaving, setCSaving] = useState(false);
   const [cMsg, setCMsg] = useState<string | null>(null);
+  const [roster, setRoster] = useState<{ source: string; rows: number; sheetUrl: string } | null>(null);
+  const [rSyncing, setRSyncing] = useState(false);
+  const [rMsg, setRMsg] = useState<string | null>(null);
+  const [exportCode, setExportCode] = useState<string | null>(null);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
 
   const loadGmail = () =>
     fetch("/api/lms/gmail/status")
@@ -67,6 +72,10 @@ export default function SettingsPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Something went wrong."))
       .finally(() => setLoading(false));
     loadGmail();
+    fetch("/api/lms/roster/sync")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setRoster(d))
+      .catch(() => {});
     fetch("/api/lms/directory")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -78,6 +87,41 @@ export default function SettingsPage() {
       })
       .catch(() => {});
   }, []);
+
+  async function syncRoster() {
+    setRSyncing(true);
+    setRMsg(null);
+    try {
+      const r = await fetch("/api/lms/roster/sync", { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || "Roster sync failed.");
+      setRMsg(`Synced \u2014 ${d.members} member${d.members === 1 ? "" : "s"} loaded from the sheet.${d.note ? ` ${d.note}` : ""}`);
+      const s2 = await fetch("/api/lms/roster/sync").then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      if (s2) setRoster(s2);
+    } catch (e) {
+      setRMsg(e instanceof Error ? e.message : "Roster sync failed.");
+    }
+    setRSyncing(false);
+  }
+
+  async function copyMembersCode() {
+    setExportMsg(null);
+    try {
+      const r = await fetch("/api/lms/roster/export");
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || "Couldn't generate the code.");
+      setExportCode(d.code);
+      try {
+        await navigator.clipboard.writeText(d.code);
+        setExportMsg(`Copied \u2014 ${d.count} members. Paste over the BASE_MEMBERS array in lib/members.ts.`);
+      } catch {
+        // Clipboard blocked (e.g. non-HTTPS) — the textarea below is the fallback.
+        setExportMsg("Select the code below and copy it manually.");
+      }
+    } catch (e) {
+      setExportMsg(e instanceof Error ? e.message : "Couldn't generate the code.");
+    }
+  }
 
   async function saveContact() {
     setCSaving(true);
@@ -187,6 +231,53 @@ export default function SettingsPage() {
                 {cMsg && <span className="text-sm text-pine-deep">{cMsg}</span>}
               </div>
             </div>
+
+            {/* Roster (Google Sheet) — exec only */}
+            {roster && (
+              <div className="mx-auto mt-6 max-w-xl rounded-3xl border border-pine/15 bg-pine/[0.03] p-8">
+                <h2 className="font-display text-lg font-semibold text-pine-deep">Member roster</h2>
+                <p className="mt-1 text-sm text-ink/60">
+                  Add or remove members, and change roles, in the{" "}
+                  <a href={roster.sheetUrl} target="_blank" rel="noreferrer" className="text-pine underline">roster Google Sheet</a>
+                  {" "}\u2014 no code needed. Edits are picked up automatically every hour; use the button to apply them now.
+                </p>
+                <p className="mt-3 text-xs text-ink/50">
+                  Currently using the <strong>{roster.source === "sheet" ? "Google Sheet" : "built-in code"}</strong> roster
+                  {roster.source === "sheet" ? ` (${roster.rows} row${roster.rows === 1 ? "" : "s"})` : ""}.
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <button onClick={syncRoster} disabled={rSyncing}
+                    className="rounded-full bg-pine px-5 py-2 text-sm font-semibold text-paper hover:bg-pine-deep disabled:opacity-60">
+                    {rSyncing ? "Syncing\u2026" : "Sync roster from sheet"}
+                  </button>
+                </div>
+                {rMsg && <p className="mt-2 text-sm text-ink/70">{rMsg}</p>}
+
+                <div className="mt-6 border-t border-pine/10 pt-4">
+                  <p className="text-sm font-semibold text-ink">Keep the code roster in step</p>
+                  <p className="mt-1 text-xs text-ink/55">
+                    The sheet is what the site uses. <code>lib/members.ts</code> is the fallback if the sheet
+                    roster is ever empty \u2014 so it&apos;s worth refreshing now and then (say, once a semester).
+                    This copies the roster as code; paste it over the <code>BASE_MEMBERS</code> array and commit.
+                  </p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <button onClick={copyMembersCode}
+                      className="rounded-full border border-pine/25 px-5 py-2 text-sm font-semibold text-pine-deep hover:bg-pine/5">
+                      Copy members.ts code
+                    </button>
+                    {exportCode && (
+                      <button onClick={() => { setExportCode(null); setExportMsg(null); }}
+                        className="text-xs font-semibold text-ink/45 hover:text-ink/70">Hide</button>
+                    )}
+                  </div>
+                  {exportMsg && <p className="mt-2 text-xs text-ink/70">{exportMsg}</p>}
+                  {exportCode && (
+                    <textarea readOnly value={exportCode} onFocus={(e) => e.currentTarget.select()}
+                      className="mt-3 h-48 w-full rounded-xl border border-pine/15 bg-pine/[0.02] p-3 font-mono text-[11px] leading-relaxed text-ink/80 outline-none" />
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Email sending (Gmail) */}
             {gmail && (

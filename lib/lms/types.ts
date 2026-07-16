@@ -21,6 +21,9 @@ export type RoleFlags = {
   vpp: boolean; // VP / President
   exec: boolean;
   outreach: boolean; // Director of Outreach (can post Newsletters)
+  /** Site administrator. Implies every permission on the site, and is the only
+   *  role that may manually sync the roster sheet. Never shown in the directory. */
+  webmaster: boolean;
   // Specific Exec titles (under the "exec" umbrella):
   financeDirector: boolean; // Director of Finance
   // Specific VP/P titles (under the "vpp" umbrella):

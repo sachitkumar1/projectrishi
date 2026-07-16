@@ -22,6 +22,12 @@
 import type { ProjectGroup, RoleFlags } from "@/lib/lms/types";
 import { PROJECT_GROUP_LABELS } from "@/lib/lms/types";
 
+/** Every role flag, in the order they appear as columns on the roster sheet. */
+export const ROLE_KEYS = [
+  "nmtLeader", "newbie", "lead", "internal", "vpp", "exec",
+  "outreach", "webmaster", "financeDirector", "president", "vpProjects", "vpInternal",
+] as const;
+
 export type Member = {
   email: string;
   firstName: string;
@@ -35,7 +41,7 @@ export type Member = {
 };
 
 // Small helper so the list below stays short and readable.
-function roles(flags: Partial<RoleFlags>): RoleFlags {
+export function roles(flags: Partial<RoleFlags>): RoleFlags {
   return {
     nmtLeader: false,
     newbie: false,
@@ -44,6 +50,7 @@ function roles(flags: Partial<RoleFlags>): RoleFlags {
     vpp: false,
     exec: false,
     outreach: false,
+    webmaster: false,
     financeDirector: false,
     president: false,
     vpProjects: false,
@@ -52,8 +59,13 @@ function roles(flags: Partial<RoleFlags>): RoleFlags {
   };
 }
 
-export const MEMBERS: Member[] = [
-  { email: "sachitk@berkeley.edu", firstName: "Sachit", lastName: "Kumar", phone: "9494069649", group: "E", roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true, outreach: true, newbie: true, financeDirector: true }) },
+/**
+ * The roster as defined in code. This is the seed for the Google Sheet and the
+ * fallback whenever the sheet-backed roster is empty or unavailable, so the
+ * dashboard always works even if Sheets/Supabase are down.
+ */
+export const BASE_MEMBERS: Member[] = [
+  { email: "sachitk@berkeley.edu", firstName: "Sachit", lastName: "Kumar", phone: "", group: "E", roles: roles({ nmtLeader: true, lead: true, internal: true, vpp: true, exec: true, outreach: true, newbie: true, financeDirector: true, webmaster: true }) },
   { email: "palakprabhakar1@berkeley.edu", firstName: "Palak", lastName: "Prabhakar", phone: "", group: "W", roles: roles({ lead: true }) },
   { email: "thanuj@berkeley.edu", firstName: "Thanuj", lastName: "Komatireddy", phone: "", group: "H", roles: roles({ exec: true, financeDirector: true }) },
   { email: "riaprathinidhi1@berkeley.edu", firstName: "Ria", lastName: "Prathinidhi", phone: "", group: "R", roles: roles({ lead: true }) },
@@ -75,6 +87,35 @@ export const MEMBERS: Member[] = [
   { email: "narayannirali@berkeley.edu", firstName: "Nirali", lastName: "Narayan", phone: "", group: "R", roles: roles({nmtLeader: true})},
   { email: "dilpreetvohra@berkeley.edu", firstName: "Jannat", lastName: "Vohra", phone: "", group: "W", roles: roles({ lead: true})}
 ];
+
+/**
+ * THE LIVE ROSTER.
+ *
+ * Other modules import this binding and read it synchronously (permissions,
+ * pickers, auth). To let the Google Sheet control membership without rewriting
+ * every call site, we never REASSIGN this array — we mutate it in place, so
+ * every existing importer sees the update immediately.
+ *
+ * It starts as the code roster and is replaced by the sheet-backed roster once
+ * that has been loaded (see lib/lms/roster.ts).
+ */
+export const MEMBERS: Member[] = [...BASE_MEMBERS];
+
+/** True when the live roster is currently coming from the sheet, not the code. */
+let rosterFromSheet = false;
+export const isRosterFromSheet = () => rosterFromSheet;
+
+/**
+ * Swap the live roster for a sheet-backed one. Passing an empty list (or null)
+ * reverts to the code roster — a deliberate safety net so an empty or broken
+ * sheet can never lock the whole club out of the dashboard.
+ */
+export function applyRoster(rows: Member[] | null): void {
+  const next = rows && rows.length > 0 ? rows : BASE_MEMBERS;
+  rosterFromSheet = Boolean(rows && rows.length > 0);
+  MEMBERS.length = 0;
+  MEMBERS.push(...next);
+}
 
 /** Look up a member by email (case-insensitive). Returns undefined if not allowed. */
 export function findMember(email?: string | null): Member | undefined {
