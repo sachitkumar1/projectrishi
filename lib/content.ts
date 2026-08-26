@@ -32,7 +32,7 @@ export const ORG = {
 
 /** All external / action links in one place. Replace TODO values. */
 export const LINKS = {
-  interestForm: "https://forms.gle/T8SeJGBQkDEAWqQH9",
+  interestForm: "",
   // Released later this cycle — leave "" and the Apply page shows "Released soon".
   application: "",
   coffeeChats: "",
