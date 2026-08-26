@@ -342,7 +342,7 @@ export const APPLY = {
     { label: "Coffee Chats", value: "8/31 – 9/11" },
     { label: "Info Session #1", value: "Mon, September 7th", time: "8 – 10 PM" },
     { label: "Info Session #2", value: "Thu, September 10th", time: "8 – 10 PM" },
-    { label: "Applications Due", value: "Fri, September 11th · 8:00 AM" },
+    { label: "Applications Due", value: "Fri, September 11th", time: "8:00 AM" },
     { label: "Interviews", value: "9/12 – 9/13 · Invite only" },
   ],
   blurb:

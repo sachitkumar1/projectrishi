@@ -46,7 +46,7 @@ export default function ApplyPage() {
                   {t.value}
                 </p>
                 {"time" in t && t.time ? (
-                  <p className="mt-1 text-xs font-medium uppercase tracking-widest text-marigold-deep/80">
+                  <p className="mt-1 text-sm font-medium uppercase tracking-widest text-marigold-deep/80">
                     {t.time}
                   </p>
                 ) : null}
