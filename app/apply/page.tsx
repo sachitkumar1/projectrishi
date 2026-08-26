@@ -45,6 +45,11 @@ export default function ApplyPage() {
                 <p className="mt-1 font-display text-xl font-semibold text-pine-deep">
                   {t.value}
                 </p>
+                {"time" in t && t.time ? (
+                  <p className="mt-1 text-xs font-medium uppercase tracking-widest text-marigold-deep/80">
+                    {t.time}
+                  </p>
+                ) : null}
               </div>
             </Reveal>
           ))}
@@ -55,7 +60,6 @@ export default function ApplyPage() {
           <div className="mt-12 grid gap-4 sm:grid-cols-3">
             <a href={LINKS.interestForm} target="_blank" rel="noopener noreferrer" className="group rounded-2xl bg-pine p-6 text-paper transition-transform hover:-translate-y-1">
               <p className="font-display text-xl font-semibold">Interest Form</p>
-              <p className="mt-1 text-sm text-paper/70">Tell us you&rsquo;re curious.</p>
               <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-marigold-soft">
                 Open form →
               </span>
@@ -63,7 +67,6 @@ export default function ApplyPage() {
             {LINKS.coffeeChats ? (
               <a href={LINKS.coffeeChats} target="_blank" rel="noopener noreferrer" className="group rounded-2xl bg-marigold p-6 text-pine-deep transition-transform hover:-translate-y-1">
                 <p className="font-display text-xl font-semibold">Coffee Chats</p>
-                <p className="mt-1 text-sm text-pine-deep/75">Meet the team 1:1.</p>
                 <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold">
                   Book a slot →
                 </span>
@@ -71,7 +74,6 @@ export default function ApplyPage() {
             ) : (
               <div aria-disabled className="rounded-2xl border border-pine/15 bg-pine/[0.04] p-6 text-pine-deep/60">
                 <p className="font-display text-xl font-semibold text-pine-deep/70">Coffee Chats</p>
-                <p className="mt-1 text-sm">Meet the team 1:1.</p>
                 <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-pine-deep/45">
                   Released soon
                 </span>
@@ -80,7 +82,6 @@ export default function ApplyPage() {
             {LINKS.application ? (
               <a href={LINKS.application} target="_blank" rel="noopener noreferrer" className="group rounded-2xl bg-pine-deep p-6 text-paper transition-transform hover:-translate-y-1">
                 <p className="font-display text-xl font-semibold">Application</p>
-                <p className="mt-1 text-sm text-paper/70">Submit before the deadline.</p>
                 <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-marigold-soft">
                   Apply now →
                 </span>
@@ -88,7 +89,6 @@ export default function ApplyPage() {
             ) : (
               <div aria-disabled className="rounded-2xl border border-pine/15 bg-pine/[0.04] p-6 text-pine-deep/60">
                 <p className="font-display text-xl font-semibold text-pine-deep/70">Application</p>
-                <p className="mt-1 text-sm">Submit before the deadline.</p>
                 <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-pine-deep/45">
                   Released soon
                 </span>
