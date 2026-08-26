@@ -32,7 +32,7 @@ export const ORG = {
 
 /** All external / action links in one place. Replace TODO values. */
 export const LINKS = {
-  interestForm: "",
+  interestForm: "https://docs.google.com/forms/d/e/1FAIpQLSfk_P2kAZCCGeli9Nwq0v5tjsPdM4C-OG26PkM85o4WWBeYxw/viewform",
   // Released later this cycle — leave "" and the Apply page shows "Released soon".
   application: "",
   coffeeChats: "",
