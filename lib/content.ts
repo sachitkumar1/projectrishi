@@ -32,11 +32,10 @@ export const ORG = {
 
 /** All external / action links in one place. Replace TODO values. */
 export const LINKS = {
-  interestForm:
-    "https://docs.google.com/forms/d/e/1FAIpQLScHh8LLlhJ1trFqvumbOyLwMwEs-WmFSSGy7m9joKr3ltR9vg/viewform?usp=header", // TODO confirm
-  application: "https://forms.gle/hh24ahnY1y6xDjvn9", // TODO confirm
-  coffeeChats:
-    "https://airtable.com/appk8PXxxHb4TAyx5/shradefRNV5M1umRS/tblM4OrL9P9GCjrVZ", // TODO confirm
+  interestForm: "https://forms.gle/T8SeJGBQkDEAWqQH9",
+  // Released later this cycle — leave "" and the Apply page shows "Released soon".
+  application: "",
+  coffeeChats: "",
   donate: "/donate", // TODO point at your real donation processor
   instagram: "https://www.instagram.com/ucbprojectrishi/?hl=en",
   facebook: "https://www.facebook.com/ucbprojectrishi/",
@@ -339,11 +338,13 @@ export const APPLY = {
   termLabel: "Fall 2026 Recruitment",
   // Recruitment timeline — edit dates each cycle.
   timeline: [
-    { label: "Coffee Chats", value: "TBD" },
-    { label: "Info Session #1", value: "TBD" },
-    { label: "Info Session #2", value: "TBD" },
-    { label: "Applications Due", value: "TBD" },
+    { label: "Tabling", value: "8/26 – 9/10" },
+    { label: "Coffee Chats", value: "8/31 – 9/11" },
+    { label: "Info Session #1", value: "Mon, September 7th" },
+    { label: "Info Session #2", value: "Thu, September 10th" },
+    { label: "Applications Due", value: "Fri, September 11th · 8:00 AM" },
+    { label: "Interviews", value: "9/12 – 9/13 · Invite only" },
   ],
   blurb:
-    "We recruit at the start of the Fall and Spring semesters. Come meet us at a coffee chat or info session, then submit your application below.",
+    "We recruit at the start of the Fall and Spring semesters. Come meet us at a coffee chat or info session, then submit your application before the deadline.",
 };

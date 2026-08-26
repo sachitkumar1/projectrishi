@@ -32,7 +32,7 @@ export default function ApplyPage() {
 
       {/* Timeline */}
       <section className="container-rishi py-20">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {APPLY.timeline.map((t, i) => (
             <Reveal key={t.label} delay={i * 0.08}>
               <div className="relative h-full rounded-2xl border border-pine/12 p-6">
@@ -60,20 +60,40 @@ export default function ApplyPage() {
                 Open form →
               </span>
             </a>
-            <a href={LINKS.coffeeChats} target="_blank" rel="noopener noreferrer" className="group rounded-2xl bg-marigold p-6 text-pine-deep transition-transform hover:-translate-y-1">
-              <p className="font-display text-xl font-semibold">Coffee Chats</p>
-              <p className="mt-1 text-sm text-pine-deep/75">Meet the team 1:1.</p>
-              <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold">
-                Book a slot →
-              </span>
-            </a>
-            <a href={LINKS.application} target="_blank" rel="noopener noreferrer" className="group rounded-2xl bg-pine-deep p-6 text-paper transition-transform hover:-translate-y-1">
-              <p className="font-display text-xl font-semibold">Application</p>
-              <p className="mt-1 text-sm text-paper/70">Submit before the deadline.</p>
-              <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-marigold-soft">
-                Apply now →
-              </span>
-            </a>
+            {LINKS.coffeeChats ? (
+              <a href={LINKS.coffeeChats} target="_blank" rel="noopener noreferrer" className="group rounded-2xl bg-marigold p-6 text-pine-deep transition-transform hover:-translate-y-1">
+                <p className="font-display text-xl font-semibold">Coffee Chats</p>
+                <p className="mt-1 text-sm text-pine-deep/75">Meet the team 1:1.</p>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold">
+                  Book a slot →
+                </span>
+              </a>
+            ) : (
+              <div aria-disabled className="rounded-2xl border border-pine/15 bg-pine/[0.04] p-6 text-pine-deep/60">
+                <p className="font-display text-xl font-semibold text-pine-deep/70">Coffee Chats</p>
+                <p className="mt-1 text-sm">Meet the team 1:1.</p>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-pine-deep/45">
+                  Released soon
+                </span>
+              </div>
+            )}
+            {LINKS.application ? (
+              <a href={LINKS.application} target="_blank" rel="noopener noreferrer" className="group rounded-2xl bg-pine-deep p-6 text-paper transition-transform hover:-translate-y-1">
+                <p className="font-display text-xl font-semibold">Application</p>
+                <p className="mt-1 text-sm text-paper/70">Submit before the deadline.</p>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-marigold-soft">
+                  Apply now →
+                </span>
+              </a>
+            ) : (
+              <div aria-disabled className="rounded-2xl border border-pine/15 bg-pine/[0.04] p-6 text-pine-deep/60">
+                <p className="font-display text-xl font-semibold text-pine-deep/70">Application</p>
+                <p className="mt-1 text-sm">Submit before the deadline.</p>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-pine-deep/45">
+                  Released soon
+                </span>
+              </div>
+            )}
           </div>
         </Reveal>
       </section>
