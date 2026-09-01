@@ -34,7 +34,7 @@ export const ORG = {
 export const LINKS = {
   interestForm: "https://docs.google.com/forms/d/e/1FAIpQLSfk_P2kAZCCGeli9Nwq0v5tjsPdM4C-OG26PkM85o4WWBeYxw/viewform",
   // Released later this cycle — leave "" and the Apply page shows "Released soon".
-  application: "",
+  application: "https://forms.gle/bnuwBqNuZLqyuf7g8",
   coffeeChats: "https://airtable.com/appRzFKM7Q0VNlrUp/shrDvG2cFmgRKPKhp",
   donate: "/donate", // TODO point at your real donation processor
   instagram: "https://www.instagram.com/ucbprojectrishi/?hl=en",
